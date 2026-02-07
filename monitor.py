@@ -223,6 +223,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     6. "CHAT": General conversation, coding help, or image analysis.
     
+    7. "CLEAR_MEMORY": User wants to clear chat history/memory.
+    
     Output Format:
     {{
       "action": "ACTION_NAME",
@@ -234,6 +236,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Cancel all reminders" -> {{"action": "CANCEL_REMINDER", "params": {{"target": "all"}}}}
     "Do I have any meetings tomorrow?" -> {{"action": "QUERY_SCHEDULE", "params": {{"time_range": "tomorrow"}}}}
     "Save note: API key 123" -> {{"action": "NOTE_ADD", "params": {{"content": "API key 123"}}}}
+    "Clear my memory" -> {{"action": "CLEAR_MEMORY", "params": {{}}}}
     "Hi" -> {{"action": "CHAT", "params": {{}}}}
     """
     
@@ -343,6 +346,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for n in notes:
                     msg += f"- {n[1]}\n"
                 await update.message.reply_text(msg, parse_mode='Markdown')
+
+        elif action == "CLEAR_MEMORY":
+            database.clear_chat_history()
+            await update.message.reply_text("🧹 Memory cleared! I have forgotten our previous conversation.")
 
         else: # CHAT or fallback
             # Normal chat logic with memory

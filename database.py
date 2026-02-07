@@ -67,6 +67,13 @@ def get_recent_chat_history(limit=10):
     conn.close()
     return rows[::-1] # Return in chronological order
 
+def clear_chat_history():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM chat_history")
+    conn.commit()
+    conn.close()
+
 # --- Note Functions ---
 def add_note(content, tags=""):
     conn = get_connection()
