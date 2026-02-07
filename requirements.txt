@@ -1,0 +1,7 @@
+requests
+schedule
+pyyaml
+ollama
+beautifulsoup4
+python-telegram-bot[job-queue]
+dateparser

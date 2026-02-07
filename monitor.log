@@ -1,0 +1,37 @@
+2026-02-08 02:23:42,435 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-08 02:23:42,435 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-08 02:23:42,435 - INFO - AI Assistant started! Press Ctrl+C to stop.
+2026-02-08 02:23:43,226 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/getMe "HTTP/1.1 200 OK"
+2026-02-08 02:23:43,405 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/deleteWebhook "HTTP/1.1 200 OK"
+2026-02-08 02:23:43,408 - INFO - Added job "check_websites_job" to job store "default"
+2026-02-08 02:23:43,408 - INFO - Added job "check_reminders_job" to job store "default"
+2026-02-08 02:23:43,408 - INFO - Scheduler started
+2026-02-08 02:23:43,408 - INFO - Application started
+2026-02-08 02:23:45,536 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/getUpdates "HTTP/1.1 200 OK"
+2026-02-08 02:23:48,593 - INFO - HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-02-08 02:23:48,593 - INFO - Intent detected: {'action': 'CANCEL_REMINDER', 'params': {'target': 'all'}}
+2026-02-08 02:23:48,601 - WARNING - Run time of job "check_reminders_job (trigger: interval[0:00:30], next run at: 2026-02-07 20:54:17 UTC)" was missed by 0:00:01.165474
+2026-02-08 02:23:49,558 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/sendMessage "HTTP/1.1 200 OK"
+2026-02-08 02:23:52,438 - INFO - Running job "check_websites_job (trigger: interval[0:05:00], next run at: 2026-02-07 20:58:52 UTC)" (scheduled at 2026-02-07 20:53:52.435587+00:00)
+2026-02-08 02:23:52,439 - INFO - Starting scheduled website check...
+2026-02-08 02:23:52,441 - INFO - Checking https://tysonchamp.com...
+2026-02-08 02:23:53,047 - ERROR - Error fetching https://tysonchamp.com: 500 Server Error: Internal Server Error for url: https://tysonchamp.com/
+2026-02-08 02:23:53,047 - ERROR - Error checking https://tysonchamp.com: 500 Server Error: Internal Server Error for url: https://tysonchamp.com/
+2026-02-08 02:23:53,438 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/sendMessage "HTTP/1.1 200 OK"
+2026-02-08 02:23:53,440 - INFO - Job "check_websites_job (trigger: interval[0:05:00], next run at: 2026-02-07 20:58:52 UTC)" executed successfully
+2026-02-08 02:23:58,779 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/getUpdates "HTTP/1.1 200 OK"
+2026-02-08 02:24:08,961 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/getUpdates "HTTP/1.1 200 OK"
+2026-02-08 02:24:14,352 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/getUpdates "HTTP/1.1 200 OK"
+2026-02-08 02:24:14,825 - INFO - HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-02-08 02:24:14,825 - INFO - Intent detected: {'action': 'QUERY_SCHEDULE', 'params': {'time_range': 'tomorrow'}}
+2026-02-08 02:24:15,765 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/sendMessage "HTTP/1.1 200 OK"
+2026-02-08 02:24:17,439 - INFO - Running job "check_reminders_job (trigger: interval[0:00:30], next run at: 2026-02-07 20:54:47 UTC)" (scheduled at 2026-02-07 20:54:17.435881+00:00)
+2026-02-08 02:24:17,440 - INFO - Job "check_reminders_job (trigger: interval[0:00:30], next run at: 2026-02-07 20:54:47 UTC)" executed successfully
+2026-02-08 02:24:25,010 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/getUpdates "HTTP/1.1 200 OK"
+2026-02-08 02:24:31,519 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/getUpdates "HTTP/1.1 200 OK"
+2026-02-08 02:24:32,238 - INFO - HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-02-08 02:24:32,238 - INFO - Intent detected: {'action': 'QUERY_SCHEDULE', 'params': {'time_range': 'today'}}
+2026-02-08 02:24:33,181 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/sendMessage "HTTP/1.1 200 OK"
+2026-02-08 02:24:42,421 - INFO - HTTP Request: POST https://api.telegram.org/bot8431735833:AAFEIqF51NF2ehPtfb7DCDiIeYMBNOJgZxE/getUpdates "HTTP/1.1 200 OK"
+2026-02-08 02:24:47,441 - INFO - Running job "check_reminders_job (trigger: interval[0:00:30], next run at: 2026-02-07 20:55:17 UTC)" (scheduled at 2026-02-07 20:54:47.435881+00:00)
+2026-02-08 02:24:47,442 - INFO - Job "check_reminders_job (trigger: interval[0:00:30], next run at: 2026-02-07 20:55:17 UTC)" executed successfully
