@@ -5,4 +5,6 @@ ollama
 beautifulsoup4
 python-telegram-bot[job-queue]
 dateparser
+paramiko
+psutil
 python-dotenv

@@ -163,6 +163,47 @@ async def check_reminders_job(context: ContextTypes.DEFAULT_TYPE):
             logging.error(f"Failed to send reminder {r_id}: {e}")
 
 
+# --- Server Monitoring Logic ---
+
+async def check_server_health_job(context: ContextTypes.DEFAULT_TYPE):
+    import system_monitor
+    conf = config.load_config()
+    chat_id = conf['telegram'].get('chat_id')
+    
+    if not chat_id:
+        return
+
+    # custom check to get objects, not string report
+    for server in conf.get('servers', []):
+        try:
+            if server.get('type') == 'local':
+                data = system_monitor.check_local_health()
+            else:
+                data = system_monitor.check_ssh_health(server)
+            
+            # Check thresholds
+            alert_needed = False
+            msg = f"⚠️ *Server Alert: {data['name']}*\n"
+            
+            if data.get('status') == 'offline':
+                msg += f"🔴 Server is OFFLINE! Error: {data.get('error')}"
+                alert_needed = True
+            else:
+                if data.get('disk_percent', 0) > 90:
+                    msg += f"💿 Disk usage high: {data['disk_percent']}%\n"
+                    alert_needed = True
+                
+                if data.get('ram_percent', 0) > 95:
+                    msg += f"🧠 RAM usage critical: {data['ram_percent']}%\n"
+                    alert_needed = True
+            
+            if alert_needed:
+                await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
+                
+        except Exception as e:
+            logging.error(f"Error in server check job: {e}")
+
+
 # --- Chat & Assistant Logic ---
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -224,6 +265,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     6. "CHAT": General conversation, coding help, or image analysis.
     
     7. "CLEAR_MEMORY": User wants to clear chat history/memory.
+
+    8. "SYSTEM_STATUS": User asks about server/system health.
     
     Output Format:
     {{
@@ -237,6 +280,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Do I have any meetings tomorrow?" -> {{"action": "QUERY_SCHEDULE", "params": {{"time_range": "tomorrow"}}}}
     "Save note: API key 123" -> {{"action": "NOTE_ADD", "params": {{"content": "API key 123"}}}}
     "Clear my memory" -> {{"action": "CLEAR_MEMORY", "params": {{}}}}
+    "How are the servers?" -> {{"action": "SYSTEM_STATUS", "params": {{}}}}
     "Hi" -> {{"action": "CHAT", "params": {{}}}}
     """
     
@@ -351,6 +395,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             database.clear_chat_history()
             await update.message.reply_text("🧹 Memory cleared! I have forgotten our previous conversation.")
 
+        elif action == "SYSTEM_STATUS":
+             import system_monitor
+             await update.message.reply_text("🔍 Checking system status...")
+             report = system_monitor.get_system_status(conf)
+             await update.message.reply_text(report, parse_mode='Markdown')
+
         else: # CHAT or fallback
             # Normal chat logic with memory
              # Save User Context
@@ -426,6 +476,9 @@ def main():
     
     # Reminder Job (Check every 30 seconds)
     job_queue.run_repeating(check_reminders_job, interval=30, first=5)
+    
+    # Server Health Job (Check every 10 minutes)
+    job_queue.run_repeating(check_server_health_job, interval=600, first=15)
     
     logging.info("AI Assistant started! Press Ctrl+C to stop.")
     application.run_polling()
