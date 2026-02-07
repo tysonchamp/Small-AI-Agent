@@ -2,3 +2,4 @@
 *.db
 __pycache__/
 .env
+config.yaml

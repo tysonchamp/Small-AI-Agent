@@ -1,6 +1,6 @@
 telegram:
-  bot_token: ""  # Loaded from .env
-  chat_id: ""    # Loaded from .env
+  bot_token: "YOUR_BOT_TOKEN_HERE"
+  chat_id: "YOUR_CHAT_ID_HERE"
 
 monitoring:
   check_interval_seconds: 300
