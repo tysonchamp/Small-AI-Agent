@@ -88,6 +88,13 @@ To stop the bot:
 ./stop.sh
 ```
 
+### Auto-Startup (Linux Systemd)
+To make the bot start automatically on boot:
+```bash
+sudo ./install_service.sh
+```
+This will install `ai-assistant.service` and enable it.
+
 ### Windows
 Run the Python script directly:
 ```powershell
