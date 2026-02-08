@@ -151,7 +151,8 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
             continue
 
         # Calculate hash on CLEARED text to avoid hidden HTML changes (nonces, etc)
-        current_cleaned_text = clean_html(current_content)
+        # run cpu-bound clean_html in executor
+        current_cleaned_text = await loop.run_in_executor(None, clean_html, current_content)
         current_hash = get_content_hash(current_cleaned_text)
         
         c.execute("SELECT content_hash, last_content FROM websites WHERE url=?", (url,))
@@ -339,10 +340,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if images:
             msg_payload['images'] = images
             
-        classification_response = ollama.chat(model=model, messages=[
+        loop = asyncio.get_running_loop()
+        classification_response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=[
             {'role': 'system', 'content': system_prompt},
             msg_payload
-        ])
+        ]))
         
         raw_json = classification_response['message']['content'].strip()
         raw_json = raw_json.replace("```json", "").replace("```", "").strip()
@@ -473,7 +475,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await context.bot.send_chat_action(chat_id=chat_id, action='typing')
             
-            response = ollama.chat(model=model, messages=messages_payload)
+            response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=messages_payload))
             bot_reply = response['message']['content']
             
             await update.message.reply_text(bot_reply, parse_mode='Markdown')

@@ -9,6 +9,7 @@ WorkingDirectory=/home/tyson/AiTools/website-monitoring-tool
 ExecStart=/home/tyson/miniconda3/bin/python3 /home/tyson/AiTools/website-monitoring-tool/monitor.py
 Restart=always
 RestartSec=10
+TimeoutStopSec=10
 Environment="PYTHONUNBUFFERED=1"
 
 [Install]
