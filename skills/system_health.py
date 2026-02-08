@@ -2,6 +2,9 @@ import paramiko
 import psutil
 import logging
 import io
+from telegram.ext import ContextTypes
+
+import config
 
 def check_local_health():
     """Checks the health of the local machine."""
@@ -134,3 +137,52 @@ def get_system_status(config):
         reports.append(check_local_health())
         
     return "\n".join([format_health_report(r) for r in reports])
+
+async def check_server_health_job(context: ContextTypes.DEFAULT_TYPE, report_all=False):
+    conf = config.load_config()
+    chat_id = conf['telegram'].get('chat_id')
+    
+    if not chat_id:
+        return
+
+    full_report = "🖥️ *System Health Report*\n\n"
+    has_alerts = False
+
+    # custom check to get objects, not string report
+    for server in conf.get('servers', []):
+        try:
+            if server.get('type') == 'local':
+                data = check_local_health()
+            else:
+                data = check_ssh_health(server)
+            
+            # Check thresholds
+            server_status_msg = f"*{data['name']}*: "
+            
+            if data.get('status') == 'offline':
+                server_status_msg += f"🔴 OFFLINE ({data.get('error')})"
+                has_alerts = True
+                full_report += server_status_msg + "\n"
+            else:
+                server_status_msg += "🟢 Online\n"
+                server_status_msg += f"   CPU: {data.get('cpu_percent', '?')}% | RAM: {data.get('ram_percent', '?')}% | Disk: {data.get('disk_percent', '?')}%\n"
+                
+                # Append to full report
+                full_report += server_status_msg + "\n"
+
+                # Check for critical alerts to send IMMEDIATELY if we aren't already reporting all
+                if not report_all:
+                    if data.get('disk_percent', 0) > 90 or data.get('ram_percent', 0) > 95:
+                        # Send specific alert
+                        await context.bot.send_message(chat_id=chat_id, text=f"⚠️ *Critical Alert*\n{server_status_msg}", parse_mode='Markdown')
+
+        except Exception as e:
+            logging.error(f"Error checking server {server.get('name')}: {e}")
+            full_report += f"*{server.get('name')}*: ⚠️ Check Failed ({e})\n"
+
+    # Send full report if requested OR if there are offline servers (which we always want to know about in a summary)
+    if report_all:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=full_report, parse_mode='Markdown')
+        except Exception as e:
+             logging.error(f"Error sending health report: {e}")

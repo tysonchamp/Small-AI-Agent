@@ -1,0 +1,82 @@
+import logging
+import dateparser
+from datetime import datetime, timedelta
+from telegram.ext import ContextTypes, ApplicationBuilder
+
+import database
+
+async def check_reminders_job(context: ContextTypes.DEFAULT_TYPE):
+    reminders = database.get_pending_reminders() # Returns (id, chat_id, content, interval_seconds)
+    
+    for r in reminders:
+        r_id, chat_id, content, interval = r
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=f"⏰ *REMINDER*\n\n{content}", parse_mode='Markdown')
+            
+            if interval > 0:
+                # Reschedule
+                next_time = datetime.now() + timedelta(seconds=interval)
+                database.reschedule_reminder(r_id, next_time)
+                logging.info(f"Rescheduled reminder {r_id} to {next_time}")
+            else:
+                database.mark_reminder_sent(r_id)
+                logging.info(f"Sent reminder {r_id} to {chat_id}")
+        except Exception as e:
+            logging.error(f"Failed to send reminder {r_id}: {e}")
+
+async def handle_add_reminder(chat_id, content, time_str, interval=0):
+    dt = dateparser.parse(time_str, settings={'PREFER_DATES_FROM': 'future'})
+    
+    # Fallback logic
+    if not dt and time_str and ("in" in time_str or "every" in time_str):
+            pass # dateparser usually handles "in X" well.
+    
+    if not dt and interval > 0:
+            dt = datetime.now() + timedelta(seconds=interval)
+    
+    if dt:
+        database.add_reminder(chat_id, content, dt, interval)
+        resp = f"✅ Reminder set: '{content}' at {dt.strftime('%H:%M:%S')}"
+        if interval > 0:
+            resp += f" (Every {interval}s)"
+        return resp
+    else:
+        return f"❓ Couldn't parse time for reminder: '{content}'"
+
+async def handle_cancel_reminder(chat_id, target):
+    if target == "all":
+        count = database.delete_all_pending_reminders(chat_id)
+        return f"🗑️ Cancelled {count} pending reminders."
+    else:
+        # Find matching reminders
+        reminders = database.search_reminders(chat_id, query_text=target)
+        if not reminders:
+                return f"No reminders found matching '{target}'."
+        else:
+            for r in reminders:
+                database.delete_reminder(r[0])
+            return f"🗑️ Cancelled {len(reminders)} reminders matching '{target}'."
+
+async def handle_query_schedule(chat_id, time_range):
+    # Determine start/end time based on range
+    start_t = datetime.now()
+    end_t = None
+    
+    if time_range == "tomorrow":
+        start_t = start_t + timedelta(days=1)
+        end_t = start_t + timedelta(days=1) # End of tomorrow? roughly
+    
+    reminders = database.search_reminders(chat_id, start_time=start_t, end_time=end_t)
+    
+    if not reminders:
+        return "📅 You have no upcoming reminders found."
+    else:
+        msg = "*📅 Upcoming Schedule:*\n"
+        for r in reminders:
+            # r = (id, content, remind_at, interval)
+            r_time = r[2]
+            msg += f"- *{r[1]}* at {r_time}"
+            if r[3] > 0:
+                    msg += " (Recurring)"
+            msg += "\n"
+        return msg

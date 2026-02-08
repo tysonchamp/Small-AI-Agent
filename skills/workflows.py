@@ -1,0 +1,131 @@
+import logging
+import dateparser
+from datetime import datetime, timedelta
+from telegram.ext import ContextTypes
+
+import config
+import database
+
+# Forward declaration or lazy import might be needed for system_health if circular
+# But here we invoke it, so we can import it inside the function or at top if no cycle.
+# system_health doesn't import workflows, so top level import is fine.
+# But system_health is not created yet! So I will use lazy import inside function.
+
+async def run_briefing_workflow(context: ContextTypes.DEFAULT_TYPE, params: dict):
+    """Compiles and sends a morning briefing."""
+    conf = config.load_config()
+    chat_id = conf['telegram'].get('chat_id')
+    
+    if not chat_id:
+        return
+
+    # 1. Get Pending Reminders for Today
+    now = datetime.now()
+    end_of_day = now.replace(hour=23, minute=59, second=59)
+    reminders = database.search_reminders(chat_id, start_time=now, end_time=end_of_day)
+    
+    # 2. Get Unread Notes (Recent 5)
+    notes = database.get_notes(limit=5)
+    
+    # 3. System Health (Simple check)
+    # Lazy import to avoid import error during migration before system_health exists
+    from skills import system_health
+    health = system_health.check_local_health()
+    
+    # Compile Message
+    msg = f"🌅 *Morning Briefing* - {now.strftime('%d %b %Y')}\n\n"
+    
+    if reminders:
+        msg += "*📅 Today's Agenda:*\n"
+        for r in reminders:
+            msg += f"- {r[1]} at {r[2]}\n"
+    else:
+        msg += "📅 No reminders set for today.\n"
+    
+    msg += "\n"
+    
+    if notes:
+        msg += "*📝 Recent Notes:*\n"
+        for n in notes:
+            msg += f"- {n[1]}\n"
+    
+    msg += "\n"
+    msg += "*🖥️ System Status:*\n"
+    msg += f"CPU: {health.get('cpu_percent', '?')}% | RAM: {health.get('ram_percent', '?')}%\n"
+    
+    await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
+
+
+async def run_system_health_workflow(context, params):
+    """Aliased to existing logic but triggered via workflow."""
+    from skills import system_health
+    await system_health.check_server_health_job(context, report_all=True)
+
+
+async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
+    """Generic job to check and run dynamic workflows."""
+    workflows = database.get_active_workflows()
+    now = datetime.now()
+    
+    for w in workflows:
+        try:
+            next_run_str = w['next_run_time']
+            try:
+                # Try standard format first
+                next_run = datetime.strptime(next_run_str, '%Y-%m-%d %H:%M:%S.%f')
+            except ValueError:
+                try:
+                        # Fallback to dateparser
+                        next_run = dateparser.parse(next_run_str)
+                except:
+                        next_run = None
+            
+            logging.info(f"Checking Workflow {w['id']} ({w['type']}): Now={now}, Next={next_run}")
+
+            if not next_run:
+                logging.warning(f"Could not parse next_run for workflow {w['id']}: {next_run_str}")
+                continue
+                
+            if now >= next_run:
+                logging.info(f"Running workflow {w['id']} ({w['type']})")
+                
+                # DISPATCHER
+                if w['type'] == 'BRIEFING':
+                    await run_briefing_workflow(context, w['params'])
+                elif w['type'] == 'SYSTEM_HEALTH':
+                    await run_system_health_workflow(context, w['params'])
+                
+                # SCHEDULE NEXT RUN
+                interval = w['interval_seconds']
+                if interval > 0:
+                    new_next_run = now + timedelta(seconds=interval)
+                    database.update_workflow_next_run(w['id'], new_next_run)
+                    logging.info(f"Rescheduled workflow {w['id']} to {new_next_run}")
+                else:
+                    # One-off workflow
+                    database.delete_workflow(w['id'])
+                    
+        except Exception as e:
+            logging.error(f"Error in workflow {w.get('id')}: {e}")
+
+async def handle_schedule_workflow(w_type, time_str, interval=0):
+    dt = dateparser.parse(time_str, settings={'PREFER_DATES_FROM': 'future'})
+    if not dt:
+        dt = datetime.now() # Default to start now if parsing fails
+
+    database.add_workflow(w_type, {}, interval, dt)
+    
+    resp = f"✅ Scheduled *{w_type}* starting at {dt.strftime('%Y-%m-%d %H:%M:%S')}"
+    if interval > 0:
+        resp += f" (Runs every {interval}s)"
+    return resp
+
+def handle_list_workflows():
+    workflows = database.get_active_workflows()
+    if not workflows:
+        return "📭 No active system workflows."
+    else:
+        msg = "*⚙️ Active Workflows:*\n"
+        for w in workflows:
+            msg += f"- *{w['type']}*: Next run {w['next_run_time']} (Interval: {w['interval_seconds']}s)\n"
+        return msg

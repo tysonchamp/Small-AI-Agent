@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch, MagicMock
 import os
 import sys
 import logging
@@ -19,7 +20,7 @@ def mock_load_config():
 
 config.load_config = mock_load_config
 
-import erp_client
+from skills import erp as erp_client
 
 class TestERPIntegration(unittest.TestCase):
     def test_get_pending_tasks(self):
