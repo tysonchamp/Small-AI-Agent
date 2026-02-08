@@ -213,6 +213,98 @@ async def check_reminders_job(context: ContextTypes.DEFAULT_TYPE):
             logging.error(f"Failed to send reminder {r_id}: {e}")
 
 
+# --- Dynamic Workflow Logic ---
+
+async def run_briefing_workflow(context: ContextTypes.DEFAULT_TYPE, params: dict):
+    """Compiles and sends a morning briefing."""
+    import database
+    conf = config.load_config()
+    chat_id = conf['telegram'].get('chat_id')
+    
+    if not chat_id:
+        return
+
+    # 1. Get Pending Reminders for Today
+    now = datetime.now()
+    end_of_day = now.replace(hour=23, minute=59, second=59)
+    reminders = database.search_reminders(chat_id, start_time=now, end_time=end_of_day)
+    
+    # 2. Get Unread Notes (Recent 5)
+    notes = database.get_notes(limit=5)
+    
+    # 3. System Health (Simple check)
+    import system_monitor
+    health = system_monitor.check_local_health()
+    
+    # Compile Message
+    msg = f"🌅 *Morning Briefing* - {now.strftime('%d %b %Y')}\n\n"
+    
+    if reminders:
+        msg += "*📅 Today's Agenda:*\n"
+        for r in reminders:
+            msg += f"- {r[1]} at {r[2]}\n"
+    else:
+        msg += "📅 No reminders set for today.\n"
+    
+    msg += "\n"
+    
+    if notes:
+        msg += "*📝 Recent Notes:*\n"
+        for n in notes:
+            msg += f"- {n[1]}\n"
+    
+    msg += "\n"
+    msg += "*🖥️ System Status:*\n"
+    msg += f"CPU: {health['cpu_percent']}% | RAM: {health['ram_percent']}%\n"
+    
+    await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
+
+
+async def run_system_health_workflow(context, params):
+    """Aliased to existing logic but triggered via workflow."""
+    await check_server_health_job(context)
+
+
+async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
+    """Generic job to check and run dynamic workflows."""
+    workflows = database.get_active_workflows()
+    now = datetime.now()
+    
+    for w in workflows:
+        try:
+            next_run_str = w['next_run_time']
+            # Parse next_run (handling potential format issues)
+            # Default database stores as string via datetime.now() default str() or specific format
+            try:
+                next_run = dateparser.parse(next_run_str)
+            except:
+                next_run = None
+                
+            if not next_run:
+                continue
+                
+            if now >= next_run:
+                logging.info(f"Running workflow {w['id']} ({w['type']})")
+                
+                # DISPATCHER
+                if w['type'] == 'BRIEFING':
+                    await run_briefing_workflow(context, w['params'])
+                elif w['type'] == 'SYSTEM_HEALTH':
+                    await run_system_health_workflow(context, w['params'])
+                
+                # SCHEDULE NEXT RUN
+                interval = w['interval_seconds']
+                if interval > 0:
+                    new_next_run = now + timedelta(seconds=interval)
+                    database.update_workflow_next_run(w['id'], new_next_run)
+                    logging.info(f"Rescheduled workflow {w['id']} to {new_next_run}")
+                else:
+                    # One-off workflow
+                    database.delete_workflow(w['id'])
+                    
+        except Exception as e:
+            logging.error(f"Error in workflow {w.get('id')}: {e}")
+
 # --- Server Monitoring Logic ---
 
 async def check_server_health_job(context: ContextTypes.DEFAULT_TYPE):
@@ -296,27 +388,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Return ONLY a JSON object.
     
     Possible Actions:
-    1. "ADD_REMINDER": User wants to set a reminder.
+    1. "ADD_REMINDER": User wants to set a reminder (simple text alert).
        - content: what to remind
-       - time: natural language time (e.g. "in 10 min", "tomorrow at 5pm")
-       - interval_seconds: 0 for one-time, >0 for recurring (e.g. "every 30s" = 30)
+       - time: natural language time
+       - interval_seconds: 0 for one-time, >0 for recurring
     
-    2. "CANCEL_REMINDER": User wants to cancel reminders.
-       - target: "all" or specific keywords (e.g. "milk")
+    2. "SCHEDULE_WORKFLOW": User wants to schedule a SYSTEM TASK.
+       - type: "BRIEFING" (morning/daily briefing) or "SYSTEM_HEALTH" (server check)
+       - time: when to start (e.g. "at 8am", "now")
+       - interval_seconds: frequency (e.g. "every 24h" = 86400, "every 1h" = 3600). 0 if one-off.
     
-    3. "QUERY_SCHEDULE": User asks about their schedule/reminders.
+    3. "LIST_WORKFLOWS": User wants to see active scheduled system tasks.
+    
+    4. "CANCEL_REMINDER": User wants to cancel reminders.
+       - target: "all" or specific keywords
+    
+    5. "QUERY_SCHEDULE": User asks about their schedule/reminders.
        - time_range: "today", "tomorrow", "all"
     
-    4. "NOTE_ADD": User wants to save a note.
+    6. "NOTE_ADD": User wants to save a note.
        - content: note content
     
-    5. "NOTE_LIST": User wants to see notes.
+    7. "NOTE_LIST": User wants to see notes.
     
-    6. "CHAT": General conversation, coding help, or image analysis.
+    8. "CHAT": General conversation, coding help, or image analysis.
     
-    7. "CLEAR_MEMORY": User wants to clear chat history/memory.
+    9. "CLEAR_MEMORY": User wants to clear chat history/memory.
 
-    8. "SYSTEM_STATUS": User asks about server/system health.
+    10. "SYSTEM_STATUS": User asks about server/system health NOW.
     
     Output Format:
     {{
@@ -326,12 +425,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     Examples:
     "Remind me every 30s to check logs" -> {{"action": "ADD_REMINDER", "params": {{"content": "check logs", "time": "in 0s", "interval_seconds": 30}}}}
-    "Cancel all reminders" -> {{"action": "CANCEL_REMINDER", "params": {{"target": "all"}}}}
-    "Do I have any meetings tomorrow?" -> {{"action": "QUERY_SCHEDULE", "params": {{"time_range": "tomorrow"}}}}
-    "Save note: API key 123" -> {{"action": "NOTE_ADD", "params": {{"content": "API key 123"}}}}
-    "Clear my memory" -> {{"action": "CLEAR_MEMORY", "params": {{}}}}
-    "How are the servers?" -> {{"action": "SYSTEM_STATUS", "params": {{}}}}
-    "Hi" -> {{"action": "CHAT", "params": {{}}}}
+    "Send me a morning briefing every day at 8am" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "BRIEFING", "time": "8:00 AM", "interval_seconds": 86400}}}}
+    "Check system health every 1 hour" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "SYSTEM_HEALTH", "time": "now", "interval_seconds": 3600}}}}
+    "What workflows are running?" -> {{"action": "LIST_WORKFLOWS", "params": {{}}}}
     """
     
     try:
@@ -357,7 +453,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # --- EXECUTE ACTION ---
         
-        if action == "ADD_REMINDER":
+        if action == "SCHEDULE_WORKFLOW":
+            w_type = params.get("type")
+            w_time_str = params.get("time")
+            w_interval = params.get("interval_seconds", 0)
+            
+            dt = dateparser.parse(w_time_str, settings={'PREFER_DATES_FROM': 'future'})
+            if not dt:
+                dt = datetime.now() # Default to start now if parsing fails
+
+            database.add_workflow(w_type, {}, w_interval, dt)
+            
+            resp = f"✅ Scheduled *{w_type}* starting at {dt.strftime('%Y-%m-%d %H:%M:%S')}"
+            if w_interval > 0:
+                resp += f" (Runs every {w_interval}s)"
+            await update.message.reply_text(resp, parse_mode='Markdown')
+
+        elif action == "LIST_WORKFLOWS":
+            workflows = database.get_active_workflows()
+            if not workflows:
+                await update.message.reply_text("📭 No active system workflows.")
+            else:
+                msg = "*⚙️ Active Workflows:*\n"
+                for w in workflows:
+                    msg += f"- *{w['type']}*: Next run {w['next_run_time']} (Interval: {w['interval_seconds']}s)\n"
+                await update.message.reply_text(msg, parse_mode='Markdown')
+
+        elif action == "ADD_REMINDER":
             r_content = params.get("content")
             r_time_str = params.get("time")
             r_interval = params.get("interval_seconds", 0)
@@ -530,6 +652,9 @@ def main():
     
     # Server Health Job (Check every 10 minutes)
     job_queue.run_repeating(check_server_health_job, interval=600, first=15)
+    
+    # Workflow Job (Check every 60 seconds)
+    job_queue.run_repeating(check_workflows_job, interval=60, first=5)
     
     logging.info("AI Assistant started! Press Ctrl+C to stop.")
     application.run_polling()

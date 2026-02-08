@@ -1,6 +1,8 @@
 import sqlite3
 import logging
 import time
+from datetime import datetime
+import json
 
 DB_FILE = 'monitor.db'
 
@@ -18,6 +20,15 @@ def init_db():
         c.execute("ALTER TABLE websites ADD COLUMN last_content TEXT")
     except sqlite3.OperationalError:
         pass 
+
+    # Workflows Table (Dynamic Scheduling)
+    c.execute('''CREATE TABLE IF NOT EXISTS workflows
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  type TEXT NOT NULL, 
+                  params TEXT, 
+                  interval_seconds INTEGER,
+                  next_run_time TEXT,
+                  created_at TEXT)''')
 
     # Chat Memory Table
     # role: 'user' or 'assistant'
@@ -165,3 +176,54 @@ def search_reminders(chat_id, query_text=None, start_time=None, end_time=None):
     rows = c.fetchall()
     conn.close()
     return rows
+
+# --- Workflow Functions ---
+
+def add_workflow(type, params, interval_seconds, next_run_time=None):
+    if not next_run_time:
+        next_run_time = datetime.now()
+        
+    conn = get_connection()
+    c = conn.cursor()
+    # Ensure params is a dict before dumping? 
+    # The caller passes a dict usually.
+    c.execute("INSERT INTO workflows (type, params, interval_seconds, next_run_time, created_at) VALUES (?, ?, ?, ?, ?)",
+              (type, json.dumps(params), interval_seconds, next_run_time, datetime.now()))
+    conn.commit()
+    w_id = c.lastrowid
+    conn.close()
+    return w_id
+
+def get_active_workflows():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, type, params, interval_seconds, next_run_time FROM workflows")
+    rows = c.fetchall()
+    conn.close()
+    
+    import json
+    workflows = []
+    for r in rows:
+        # id, type, params_json, interval, next_run
+        workflows.append({
+            'id': r[0],
+            'type': r[1],
+            'params': json.loads(r[2]) if r[2] else {},
+            'interval_seconds': r[3],
+            'next_run_time': r[4]
+        })
+    return workflows
+
+def update_workflow_next_run(w_id, next_time):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE workflows SET next_run_time=? WHERE id=?", (next_time, w_id))
+    conn.commit()
+    conn.close()
+
+def delete_workflow(w_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM workflows WHERE id=?", (w_id,))
+    conn.commit()
+    conn.close()
