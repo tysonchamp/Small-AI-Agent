@@ -397,9 +397,11 @@ def fetch_youtube_transcript(url):
         return None, "Could not extract video ID."
     
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-        # Combine text
-        full_text = " ".join([t['text'] for t in transcript_list])
+        # 2026-02-08: Fixed API usage based on debug. Requires instantiation.
+        api = YouTubeTranscriptApi()
+        transcript = api.fetch(video_id)
+        # Combine text from snippets
+        full_text = " ".join([s.text for s in transcript])
         return full_text, None
     except Exception as e:
         return None,str(e)
@@ -566,11 +568,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                  # Summarize with Ollama
                  summary_prompt = f"""
-                 You are a helpful research assistant.
+                 You are an expert content analyst. 
+                 The following text is the content of a website or video transcript.
                  
-                 Task: {instruction}
+                 Your specific task: "{instruction}"
                  
-                 Content:
+                 Guidelines:
+                 - Focus ONLY on the subject matter (products, features, news, concepts).
+                 - Do NOT evaluate the quality of the text/transcript.
+                 - Do NOT sound like you are giving feedback to a writer.
+                 - Provide a clear, bulleted summary of what the content is ABOUT.
+                 
+                 Content to Analyze:
                  {content_text[:20000]} 
                  """
                  # Truncate content to avoid context limits (20k chars is safe for most ~32k context models, or 8k)
@@ -581,7 +590,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      {'role': 'user', 'content': summary_prompt}
                  ]))
                  
-                 await update.message.reply_text(summary_response['message']['content'], parse_mode='Markdown')
+                 response_text = summary_response['message']['content']
+                 
+                 # Split into chunks of 4000 chars (safe limit)
+                 chunk_size = 4000
+                 for i in range(0, len(response_text), chunk_size):
+                     chunk = response_text[i:i + chunk_size]
+                     try:
+                         await update.message.reply_text(chunk, parse_mode='Markdown')
+                     except Exception as e:
+                         logging.error(f"Markdown parsing failed for chunk, sending plain text: {e}")
+                         await update.message.reply_text(chunk)
 
         elif action == "SCHEDULE_WORKFLOW":
             w_type = params.get("type")
