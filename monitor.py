@@ -262,7 +262,8 @@ async def run_briefing_workflow(context: ContextTypes.DEFAULT_TYPE, params: dict
 
 async def run_system_health_workflow(context, params):
     """Aliased to existing logic but triggered via workflow."""
-    await check_server_health_job(context)
+    # Force a report even if healthy
+    await check_server_health_job(context, report_all=True)
 
 
 async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
@@ -276,11 +277,20 @@ async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
             # Parse next_run (handling potential format issues)
             # Default database stores as string via datetime.now() default str() or specific format
             try:
-                next_run = dateparser.parse(next_run_str)
-            except:
-                next_run = None
-                
+                # Try standard format first
+                next_run = datetime.strptime(next_run_str, '%Y-%m-%d %H:%M:%S.%f')
+            except ValueError:
+                try:
+                     # Fallback to dateparser
+                     next_run = dateparser.parse(next_run_str)
+                except:
+                     next_run = None
+            
+            # Logging for debug
+            logging.info(f"Checking Workflow {w['id']} ({w['type']}): Now={now}, Next={next_run}")
+
             if not next_run:
+                logging.warning(f"Could not parse next_run for workflow {w['id']}: {next_run_str}")
                 continue
                 
             if now >= next_run:
@@ -307,13 +317,16 @@ async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
 
 # --- Server Monitoring Logic ---
 
-async def check_server_health_job(context: ContextTypes.DEFAULT_TYPE):
+async def check_server_health_job(context: ContextTypes.DEFAULT_TYPE, report_all=False):
     import system_monitor
     conf = config.load_config()
     chat_id = conf['telegram'].get('chat_id')
     
     if not chat_id:
         return
+
+    full_report = "🖥️ *System Health Report*\n\n"
+    has_alerts = False
 
     # custom check to get objects, not string report
     for server in conf.get('servers', []):
@@ -324,20 +337,35 @@ async def check_server_health_job(context: ContextTypes.DEFAULT_TYPE):
                 data = system_monitor.check_ssh_health(server)
             
             # Check thresholds
-            alert_needed = False
-            msg = f"⚠️ *Server Alert: {data['name']}*\n"
+            server_status_msg = f"*{data['name']}*: "
             
             if data.get('status') == 'offline':
-                msg += f"🔴 Server is OFFLINE! Error: {data.get('error')}"
-                alert_needed = True
+                server_status_msg += f"🔴 OFFLINE ({data.get('error')})"
+                has_alerts = True
+                full_report += server_status_msg + "\n"
             else:
-                if data.get('disk_percent', 0) > 90:
-                    msg += f"💿 Disk usage high: {data['disk_percent']}%\n"
-                    alert_needed = True
+                server_status_msg += "🟢 Online\n"
+                server_status_msg += f"   CPU: {data.get('cpu_percent', '?')}% | RAM: {data.get('ram_percent', '?')}% | Disk: {data.get('disk_percent', '?')}%\n"
                 
-                if data.get('ram_percent', 0) > 95:
-                    msg += f"🧠 RAM usage critical: {data['ram_percent']}%\n"
-                    alert_needed = True
+                # Append to full report
+                full_report += server_status_msg + "\n"
+
+                # Check for critical alerts to send IMMEDIATELY if we aren't already reporting all
+                if not report_all:
+                    if data.get('disk_percent', 0) > 90 or data.get('ram_percent', 0) > 95:
+                        # Send specific alert
+                        await context.bot.send_message(chat_id=chat_id, text=f"⚠️ *Critical Alert*\n{server_status_msg}", parse_mode='Markdown')
+
+        except Exception as e:
+            logging.error(f"Error checking server {server.get('name')}: {e}")
+            full_report += f"*{server.get('name')}*: ⚠️ Check Failed ({e})\n"
+
+    # Send full report if requested OR if there are offline servers (which we always want to know about in a summary)
+    if report_all:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=full_report, parse_mode='Markdown')
+        except Exception as e:
+             logging.error(f"Error sending health report: {e}")
             
             if alert_needed:
                 await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
