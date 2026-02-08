@@ -27,15 +27,16 @@ def check_ssh_health(server_config):
     """Checks the health of a remote server via SSH."""
     hostname = server_config.get('host')
     username = server_config.get('user', 'root')
-    key_path = server_config.get('key_path')
     password = server_config.get('password')
+    key_path = server_config.get('key_path')
+    port = server_config.get('port', 22)
     name = server_config.get('name', hostname)
     
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     
     try:
-        connect_kwargs = {"hostname": hostname, "username": username}
+        connect_kwargs = {"hostname": hostname, "username": username, "port": port}
         if key_path:
             connect_kwargs["key_filename"] = key_path
         if password:
