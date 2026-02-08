@@ -767,6 +767,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif action == "SYSTEM_STATUS":
              import system_monitor
+             import importlib
+             importlib.reload(system_monitor)
              await update.message.reply_text("🔍 Checking system status...")
              report = system_monitor.get_system_status(conf)
              await update.message.reply_text(report, parse_mode='Markdown')

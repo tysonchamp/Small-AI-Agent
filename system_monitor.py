@@ -45,26 +45,50 @@ def check_ssh_health(server_config):
         client.connect(**connect_kwargs, timeout=10)
         
         # Run commands
-        # 1. CPU Load (uptime)
-        conn_stdin, conn_stdout, conn_stderr = client.exec_command("uptime | awk -F'load average:' '{ print $2 }'")
-        load_avg = conn_stdout.read().decode().strip().split(',')[0] # 1 min load
+        # 1. CPU Usage % (read /proc/stat twice)
+        # We run a compound command to get two readings with a 1s delay
+        cmd_cpu = "grep 'cpu ' /proc/stat; sleep 1; grep 'cpu ' /proc/stat"
+        stdin, stdout, stderr = client.exec_command(cmd_cpu)
+        cpu_output = stdout.read().decode().strip().split('\n')
         
+        if len(cpu_output) >= 2:
+            # Parse first reading
+            fields1 = [float(x) for x in cpu_output[0].split()[1:]]
+            total1 = sum(fields1)
+            idle1 = fields1[3] # 4th field is idle
+            
+            # Parse second reading
+            fields2 = [float(x) for x in cpu_output[1].split()[1:]]
+            total2 = sum(fields2)
+            idle2 = fields2[3]
+            
+            # Calculate delta
+            delta_total = total2 - total1
+            delta_idle = idle2 - idle1
+            
+            if delta_total > 0:
+                cpu_usage = round((1 - (delta_idle / delta_total)) * 100, 1)
+            else:
+                cpu_usage = 0.0
+        else:
+            cpu_usage = "?"
+
         # 2. RAM (free -m)
-        conn_stdin, conn_stdout, conn_stderr = client.exec_command("free -m | grep Mem | awk '{print $2, $3}'")
-        ram_data = conn_stdout.read().decode().strip().split()
+        stdin, stdout, stderr = client.exec_command("free -m | grep Mem | awk '{print $2, $3}'")
+        ram_data = stdout.read().decode().strip().split()
         ram_total = int(ram_data[0])
         ram_used = int(ram_data[1])
         ram_percent = round((ram_used / ram_total) * 100, 1)
         
         # 3. Disk (df -h /)
-        conn_stdin, conn_stdout, conn_stderr = client.exec_command("df -h / | tail -1 | awk '{print $5}'")
-        disk_percent = conn_stdout.read().decode().strip().replace('%', '')
+        stdin, stdout, stderr = client.exec_command("df -h / | tail -1 | awk '{print $5}'")
+        disk_percent = stdout.read().decode().strip().replace('%', '')
         
         client.close()
         
         return {
             "name": name,
-            "cpu_load": load_avg,
+            "cpu": cpu_usage,
             "ram_used": round(ram_used / 1024, 2), # Convert MB to GB? No, free -m is MB. 
             "ram_total": round(ram_total / 1024, 2),
             "ram_percent": ram_percent,
