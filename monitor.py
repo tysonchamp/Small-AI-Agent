@@ -10,6 +10,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 
 import config
 import database
+import erp_client
 
 # Configure logging
 logging.basicConfig(
@@ -511,7 +512,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     11. "CLEAR_MEMORY": User wants to clear chat history/memory.
 
     12. "SYSTEM_STATUS": User asks about server/system health NOW.
+
+    13. "ERP_TASKS": User wants to see pending tasks from the ERP.
     
+    14. "ERP_INVOICES": User wants to see due invoices or a summary.
+        - type: "due" or "summary"
+    
+    15. "ERP_CREDENTIALS": User wants to see project credentials.
+    
+    16. "ERP_CUSTOMER_INVOICES": User wants to see invoices for a specific customer.
+        - customer_id: the ID of the customer
+
     Output Format:
     {{
       "action": "ACTION_NAME",
@@ -522,6 +533,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Who won the Super Bowl?" -> {{"action": "WEB_SEARCH", "params": {{"query": "Super Bowl winner 2025"}}}}
     "Price of Bitcoin" -> {{"action": "WEB_SEARCH", "params": {{"query": "current price of bitcoin"}}}}
     "Summarize this video: https://youtu.be/xyz" -> {{"action": "SUMMARIZE_CONTENT", "params": {{"url": "https://youtu.be/xyz"}}}}
+    "Show me pending tasks" -> {{"action": "ERP_TASKS", "params": {{}}}}
+    "What are the due invoices?" -> {{"action": "ERP_INVOICES", "params": {{"type": "due"}}}}
+    "Give me an invoice summary" -> {{"action": "ERP_INVOICES", "params": {{"type": "summary"}}}}
+    "Get credentials" -> {{"action": "ERP_CREDENTIALS", "params": {{}}}}
+    "Invoices for customer 123" -> {{"action": "ERP_CUSTOMER_INVOICES", "params": {{"customer_id": "123"}}}}
     """
     
     try:
@@ -750,6 +766,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
              await update.message.reply_text("🔍 Checking system status...")
              report = system_monitor.get_system_status(conf)
              await update.message.reply_text(report, parse_mode='Markdown')
+
+        elif action == "ERP_TASKS":
+            await update.message.reply_text("📋 Fetching pending tasks...")
+            msg = await loop.run_in_executor(None, erp_client.get_pending_tasks)
+            await update.message.reply_text(msg, parse_mode='Markdown')
+
+        elif action == "ERP_INVOICES":
+            req_type = params.get('type', 'due')
+            if req_type == 'summary':
+                await update.message.reply_text("📊 Fetching invoice summary...")
+                msg = await loop.run_in_executor(None, erp_client.get_invoice_summary)
+            else:
+                await update.message.reply_text("💰 Fetching due invoices...")
+                msg = await loop.run_in_executor(None, erp_client.get_due_invoices)
+            
+            await update.message.reply_text(msg, parse_mode='Markdown')
+
+        elif action == "ERP_CREDENTIALS":
+            await update.message.reply_text("🔐 Fetching credentials...")
+            msg = await loop.run_in_executor(None, erp_client.get_credentials)
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+        elif action == "ERP_CUSTOMER_INVOICES":
+            customer_id = params.get('customer_id')
+            if not customer_id:
+                 await update.message.reply_text("❓ Please specify a customer ID.")
+            else:
+                await update.message.reply_text(f"📄 Fetching invoices for customer {customer_id}...")
+                msg = await loop.run_in_executor(None, erp_client.get_customer_invoices, customer_id)
+                await update.message.reply_text(msg, parse_mode='Markdown')
 
         else: # CHAT or fallback
             # Normal chat logic with memory
