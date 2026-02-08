@@ -44,13 +44,29 @@ class TestERPIntegration(unittest.TestCase):
         print("\nTesting get_credentials...")
         result = erp_client.get_credentials()
         print(result)
-        self.assertIn("ERP System", result)
+        self.assertIn("VPS Server", result)
 
     def test_get_customer_invoices(self):
         print("\nTesting get_customer_invoices...")
         result = erp_client.get_customer_invoices(1)
         print(result)
-        self.assertIn("INV-2023-001", result)
+        self.assertIn("INV-2023-1", result)
+
+    def test_search_credentials(self):
+        print("\nTesting search_credentials...")
+        result = erp_client.get_credentials(search_query="VPS")
+        print(result)
+        self.assertIn("VPS Server", result)
+        
+        result_empty = erp_client.get_credentials(search_query="NonExistent")
+        self.assertIn("No credentials found", result_empty)
+
+    def test_search_invoices(self):
+        print("\nTesting search_invoices...")
+        result = erp_client.search_invoices(customer_name="John")
+        print(result)
+        self.assertIn("INV-2023-005", result)
+        self.assertIn("John Doe", result)
 
 if __name__ == '__main__':
     unittest.main()

@@ -462,7 +462,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"Processing message from {chat_id}: {user_message}")
     
     conf = config.load_config()
-    model = conf['ollama'].get('model', 'llama3')
+    model = conf['ollama'].get('model', 'gemma3:latest')
 
     # --- Intelligent Intent Classification ---
     import json
@@ -539,6 +539,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "What are the due invoices?" -> {{"action": "ERP_INVOICES", "params": {{"type": "due"}}}}
     "Give me an invoice summary" -> {{"action": "ERP_INVOICES", "params": {{"type": "summary"}}}}
     "Get credentials for AWS" -> {{"action": "ERP_CREDENTIALS", "params": {{"search": "AWS"}}}}
+    "Show Bennett credential" -> {{"action": "ERP_CREDENTIALS", "params": {{"search": "Bennett"}}}}
     "Search invoices for John" -> {{"action": "ERP_SEARCH_INVOICES", "params": {{"customer_name": "John"}}}}
     "Invoices for customer 123" -> {{"action": "ERP_SEARCH_INVOICES", "params": {{"customer_id": "123"}}}}
     """
@@ -794,8 +795,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text("🔐 Fetching all credentials...")
                 msg = await loop.run_in_executor(None, erp_client.get_credentials)
-            await update.message.reply_text(msg, parse_mode='Markdown')
-            
             await update.message.reply_text(msg, parse_mode='Markdown')
             
         elif action == "ERP_SEARCH_INVOICES":
