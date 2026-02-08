@@ -80,39 +80,97 @@ class MockERPServer(BaseHTTPRequestHandler):
             }
             self.wfile.write(json.dumps(response).encode())
 
-        elif self.path == '/api/agent/credentials':
+        elif self.path.startswith('/api/agent/credentials'):
+            from urllib.parse import urlparse, parse_qs
+            query_components = parse_qs(urlparse(self.path).query)
+            search = query_components.get('search', [None])[0]
+
             self._set_headers()
-            response = {
-                "success": True,
-                "count": 1,
-                "data": [
-                    {
-                        "id": 1,
-                        "project_name": "ERP System",
-                        "service_name": "Database",
-                        "username": "admin",
-                        "password": "decrypted-password-here",
-                        "description": "Production DB Access"
-                    }
-                ]
-            }
+            
+            # Simple mock filter
+            if search and search.lower() not in "cloud project vps server":
+                 response = {
+                    "success": True,
+                    "count": 0,
+                    "data": []
+                }
+            else:
+                response = {
+                    "success": True,
+                    "count": 1,
+                    "data": [
+                        {
+                            "id": 1,
+                            "project_name": "Cloud Project",
+                            "service_name": "VPS Server",
+                            "username": "root",
+                            "password": "decrypted-password-here",
+                            "description": "Production VPS"
+                        }
+                    ]
+                }
             self.wfile.write(json.dumps(response).encode())
 
         elif self.path.startswith('/api/agent/customers/') and self.path.endswith('/invoices'):
             self._set_headers()
-            response = {
-                "success": True,
-                "customer_id": "1",
-                "count": 1,
-                "data": [
-                     {
-                        "id": 101,
-                        "invoice_no": "INV-2023-001",
-                        "grand_total": 5000.00,
-                        "status": "Pending"
-                    }
-                ]
-            }
+            try:
+                # Extract customer ID from URL
+                parts = self.path.split('/')
+                customer_id = parts[-2]
+                
+                # ... fetch by ID logic ...
+                # Use query param or path? Path as per doc: /customers/{id}/invoices
+                
+                # MOCK DATA
+                response = {
+                    "success": True,
+                    "customer_id": customer_id,
+                    "count": 1,
+                    "data": [
+                         {
+                            "id": 101,
+                            "invoice_no": f"INV-2023-{customer_id}",
+                            "customer_name": f"Customer {customer_id}",
+                            "grand_total": 5000.00,
+                            "status": "Pending"
+                        }
+                    ]
+                }
+                self.wfile.write(json.dumps(response).encode())
+            except Exception as e:
+                self._set_headers(500)
+                self.wfile.write(json.dumps({"success": False, "message": str(e)}).encode())
+
+        elif self.path.startswith('/api/agent/invoices') and '/customers/' not in self.path:
+             # Search Invoices
+            from urllib.parse import urlparse, parse_qs
+            query_components = parse_qs(urlparse(self.path).query)
+            customer_name = query_components.get('customer_name', [None])[0]
+            
+            self._set_headers()
+            if customer_name and "John" in customer_name:
+                 response = {
+                    "success": True,
+                    "count": 1,
+                     "data": [
+                        {
+                            "id": 105,
+                            "invoice_no": "INV-2023-005",
+                            "customer_name": "John Doe",
+                            "date": "2023-11-20",
+                            "grand_total": 1500.00,
+                            "paid_amount": 0,
+                            "due_amount": 1500.00,
+                            "status": "Pending"
+                        }
+                    ]
+                }
+            else:
+                 response = {
+                    "success": True,
+                    "count": 0,
+                    "data": []
+                }
             self.wfile.write(json.dumps(response).encode())
 
         else:

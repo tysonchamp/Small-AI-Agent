@@ -127,14 +127,18 @@ def get_customer_invoices(customer_id):
         logging.error(f"Error fetching invoices for customer {customer_id}: {e}")
         return f"⚠️ Connection Error: {e}"
 
-def get_credentials():
+def get_credentials(search_query=None):
     base_url = get_base_url()
     if not base_url:
         return "⚠️ ERP URL not configured."
 
     url = f"{base_url}/credentials"
+    params = {}
+    if search_query:
+        params['search'] = search_query
+
     try:
-        response = requests.get(url, headers=get_headers(), timeout=10)
+        response = requests.get(url, headers=get_headers(), params=params, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if data.get('success'):
@@ -157,4 +161,38 @@ def get_credentials():
             return f"⚠️ Error fetching credentials: HTTP {response.status_code}"
     except Exception as e:
         logging.error(f"Error fetching credentials: {e}")
+        return f"⚠️ Connection Error: {e}"
+
+def search_invoices(customer_name=None, customer_id=None):
+    base_url = get_base_url()
+    if not base_url:
+        return "⚠️ ERP URL not configured."
+
+    url = f"{base_url}/invoices"
+    params = {}
+    if customer_name:
+        params['customer_name'] = customer_name
+    if customer_id:
+        params['customer_id'] = customer_id
+        
+    try:
+        response = requests.get(url, headers=get_headers(), params=params, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                invoices = data.get('data', [])
+                if not invoices:
+                    return f"✅ No invoices found matching your criteria."
+                
+                msg = f"🔎 *Found Invoices ({len(invoices)}):*\n"
+                for inv in invoices:
+                    status_icon = "✅" if inv.get('status') == 'Paid' else "⏳"
+                    msg += f"- {status_icon} *{inv['invoice_no']}*: {inv['customer_name']} - {inv['grand_total']} ({inv['status']})\n"
+                return msg
+            else:
+                return f"⚠️ API Error: {data.get('message', 'Unknown error')}"
+        else:
+            return f"⚠️ Error searching invoices: HTTP {response.status_code}"
+    except Exception as e:
+        logging.error(f"Error searching invoices: {e}")
         return f"⚠️ Connection Error: {e}"

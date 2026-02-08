@@ -519,9 +519,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - type: "due" or "summary"
     
     15. "ERP_CREDENTIALS": User wants to see project credentials.
+        - search: optional keyword (e.g. "vps", "aws")
     
-    16. "ERP_CUSTOMER_INVOICES": User wants to see invoices for a specific customer.
-        - customer_id: the ID of the customer
+    16. "ERP_SEARCH_INVOICES": User wants to search invoices by customer name OR ID.
+        - customer_name: name to search
+        - customer_id: precise ID
 
     Output Format:
     {{
@@ -536,8 +538,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Show me pending tasks" -> {{"action": "ERP_TASKS", "params": {{}}}}
     "What are the due invoices?" -> {{"action": "ERP_INVOICES", "params": {{"type": "due"}}}}
     "Give me an invoice summary" -> {{"action": "ERP_INVOICES", "params": {{"type": "summary"}}}}
-    "Get credentials" -> {{"action": "ERP_CREDENTIALS", "params": {{}}}}
-    "Invoices for customer 123" -> {{"action": "ERP_CUSTOMER_INVOICES", "params": {{"customer_id": "123"}}}}
+    "Get credentials for AWS" -> {{"action": "ERP_CREDENTIALS", "params": {{"search": "AWS"}}}}
+    "Search invoices for John" -> {{"action": "ERP_SEARCH_INVOICES", "params": {{"customer_name": "John"}}}}
+    "Invoices for customer 123" -> {{"action": "ERP_SEARCH_INVOICES", "params": {{"customer_id": "123"}}}}
     """
     
     try:
@@ -784,18 +787,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(msg, parse_mode='Markdown')
 
         elif action == "ERP_CREDENTIALS":
-            await update.message.reply_text("🔐 Fetching credentials...")
-            msg = await loop.run_in_executor(None, erp_client.get_credentials)
+            search_query = params.get('search')
+            if search_query:
+                await update.message.reply_text(f"🔐 Searching credentials for '{search_query}'...")
+                msg = await loop.run_in_executor(None, erp_client.get_credentials, search_query)
+            else:
+                await update.message.reply_text("🔐 Fetching all credentials...")
+                msg = await loop.run_in_executor(None, erp_client.get_credentials)
             await update.message.reply_text(msg, parse_mode='Markdown')
             
-        elif action == "ERP_CUSTOMER_INVOICES":
-            customer_id = params.get('customer_id')
-            if not customer_id:
-                 await update.message.reply_text("❓ Please specify a customer ID.")
-            else:
-                await update.message.reply_text(f"📄 Fetching invoices for customer {customer_id}...")
-                msg = await loop.run_in_executor(None, erp_client.get_customer_invoices, customer_id)
-                await update.message.reply_text(msg, parse_mode='Markdown')
+            await update.message.reply_text(msg, parse_mode='Markdown')
+            
+        elif action == "ERP_SEARCH_INVOICES":
+             customer_name = params.get('customer_name')
+             customer_id = params.get('customer_id')
+             if not customer_name and not customer_id:
+                 await update.message.reply_text("❓ Please specify a customer name or ID.")
+             else:
+                 await update.message.reply_text(f"🔎 Searching invoices...")
+                 msg = await loop.run_in_executor(None, erp_client.search_invoices, customer_name, customer_id)
+                 await update.message.reply_text(msg, parse_mode='Markdown')
 
         else: # CHAT or fallback
             # Normal chat logic with memory
