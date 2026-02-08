@@ -2,7 +2,13 @@ import unittest
 from unittest.mock import patch, MagicMock
 import os
 import sys
+import os
+
+# Add parent directory to path to find config and skills
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import logging
+from unittest.mock import patch, MagicMock
 
 # Set env vars for testing BEFORE importing config/erp_client
 os.environ['GBYTE_ERP_URL'] = 'http://127.0.0.1:8001' # Testing auto-append logic

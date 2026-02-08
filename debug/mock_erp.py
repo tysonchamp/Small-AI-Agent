@@ -1,6 +1,12 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import socketserver
 import json
 import logging
+import sys
+import os
+
+# Add parent directory to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
