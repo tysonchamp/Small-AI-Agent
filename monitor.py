@@ -13,12 +13,19 @@ import database
 # Import Skills
 from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp
 
+import os
+from logging.handlers import RotatingFileHandler
+
 # Configure logging
+log_dir = "logs"
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "monitor.log")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("monitor.log"),
+        RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=1), # 5MB, 1 backup
         logging.StreamHandler()
     ]
 )
