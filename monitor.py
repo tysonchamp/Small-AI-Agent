@@ -60,8 +60,13 @@ def analyze_changes_with_ollama(old_content, new_content, model):
     
     prompt = f"""
     You are a website monitoring assistant. Verify if there are meaningful changes between the old and new website content below.
-    Ignore minor changes like timestamps, CSRF tokens, or dynamic ads.
-    Summarize the key changes in a concise manner for a user notification.
+    Ignore minor changes like timestamps, CSRF tokens, dynamic ads, or slight formatting differences.
+    
+    Return your analysis in STRICT JSON format with two keys:
+    1. "has_meaningful_change": boolean (true if meaningful changes exist, false otherwise)
+    2. "summary": string (concise summary of changes, or null if no meaningful changes)
+
+    Do not include any conversational text outside the JSON.
 
     OLD CONTENT:
     {old_text}
@@ -74,7 +79,38 @@ def analyze_changes_with_ollama(old_content, new_content, model):
         response = ollama.chat(model=model, messages=[
             {'role': 'user', 'content': prompt},
         ])
-        return response['message']['content']
+        content = response['message']['content'].strip()
+        
+        # improved parsing logic
+        import json
+        import re
+        
+        try:
+            # Try parsing directly
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            # Try to extract JSON from text (in case model is chatty)
+            match = re.search(r'\{.*\}', content, re.DOTALL)
+            if match:
+                try:
+                    data = json.loads(match.group(0))
+                except:
+                    data = None
+            else:
+                data = None
+        
+        if data:
+            if not data.get("has_meaningful_change"):
+                return None
+            return data.get("summary")
+            
+        # Fallback if JSON parsing failed completely
+        lower_content = content.lower()
+        if "no meaningful change" in lower_content:
+            return None
+            
+        return content
+
     except Exception as e:
         logging.error(f"Error querying Ollama: {e}")
         return f"Error analyzing changes with AI: {e}"
@@ -125,12 +161,15 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
             
             analysis = analyze_changes_with_ollama(old_content, current_content, model)
             
-            msg = f"📢 *Website Change Detected!* \n\nURL: {url}\n\nAI Analysis:\n{analysis}"
-            if chat_id:
-                try:
-                    await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
-                except Exception as send_e:
-                     logging.error(f"Failed to send change notification: {send_e}")
+            if analysis:
+                msg = f"📢 *Website Change Detected!* \n\nURL: {url}\n\nAI Analysis:\n{analysis}"
+                if chat_id:
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
+                    except Exception as send_e:
+                         logging.error(f"Failed to send change notification: {send_e}")
+            else:
+                logging.info(f"No meaningful changes for {url}. Notification suppressed.")
 
             c.execute("UPDATE websites SET content_hash=?, last_checked=?, last_content=? WHERE url=?",
                       (current_hash, time.strftime('%Y-%m-%d %H:%M:%S'), current_content, url))
