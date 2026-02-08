@@ -1,153 +1,157 @@
-# 🤖 Personal Artificial Intelligence Assistant
+# 🤖 Personal AI Assistant
 
-A powerful, self-hosted AI assistant that combines **website monitoring**, **persistent memory**, **smart reminders**, and **note-taking** into a single Telegram bot. Powered by **Ollama** for local LLM inference, ensuring privacy and intelligence without subscription fees.
+A powerful, modular, and self-hosted AI assistant that combines **website monitoring**, **ERP integration**, **system health checks**, **web search**, and **personal organization** into a single Telegram bot. Powered by **Ollama** for local, private intelligence.
 
 ## ✨ Features
 
-- **🧠 Persistent Memory**: Remembers context from previous conversations.
-- **👁️ Website Monitoring**: Tracks changes on specified websites and sends AI-analyzed summaries of updates.
-- **⏰ Intelligent Reminders**:
-  - Natural language scheduling: *"Remind me to check server logs in 10 minutes"*
-  - Recurring reminders: *"Remind me every hour to drink water"*
-  - Smart management: *"Cancel all reminders"* or *"Do I have any meetings tomorrow?"*
-- **📝 Smart Notes**: Save and retrieve notes effortlessly using natural language.
-- **📸 Vision Capabilities**: Analyze images sent to the chat (requires a vision-capable model like `llava`).
-- **🛡️ Privacy-First**: Runs locally using Ollama. Your data stays on your machine.
+### 🧠 Core Intelligence
+- **Persistent Memory**: Remembers context from previous conversations.
+- **Natural Language Understanding**: Chat naturally to trigger complex actions.
+- **Local Privacy**: Runs 100% locally using Ollama (Llama 3, Mistral, Gemma, etc.).
+
+### �️ Skills & Modules
+The bot is organized into modular `skills/`:
+
+- **👁️ Web Monitor** (`skills/web_monitor.py`): 
+  - Tracks changes on specified websites (background job).
+  - Sends AI-analyzed summaries of updates.
+
+- **💼 ERP Integration** (`skills/erp.py`):
+  - **Tasks**: "Show my pending tasks."
+  - **Invoices**: "What invoices are due?" or "Search invoices for Client X."
+  - **Credentials**: "Get credentials for AWS." (Secure retrieval).
+
+- **🌐 Web Search** (`skills/web_search.py`):
+  - **Real-time Search**: "Search the web for the latest crypto prices."
+  - **Summarization**: "Summarize this article: [URL]" or "Summarize this YouTube video: [URL]".
+
+- **🖥️ System Health** (`skills/system_health.py`):
+  - **Status Checks**: "Check system status."
+  - **Remote Monitoring**: Monitors CPU/RAM/Disk of configured VPS/Servers via SSH.
+  - **Alerts**: Auto-alerts on high resource usage.
+
+- **⏰ Reminders & Schedule** (`skills/reminders.py`):
+  - **Natural Language**: "Remind me to check logs in 10 minutes."
+  - **Recurring**: "Remind me every hour to stretch."
+  - **Management**: "Cancel all reminders" or "What is my schedule?"
+
+- **⚙️ Workflows** (`skills/workflows.py`):
+  - **Automated Tasks**: Create custom recurring workflows (e.g., Daily Briefings).
+  - **Morning Briefing**: Aggregates calendar, reminders, and system status.
+
+- **� Notes** (`skills/notes.py`):
+  - **Capture**: "Save a note: Server IP is 10.0.0.1"
+  - **Retrieve**: "Show my notes."
 
 ---
 
-## 🚀 Prerequisites
+## � Project Structure
 
-1.  **Python 3.10+** installed.
-2.  **Ollama** installed and running (`ollama serve`).
-    - Recommended models: `llama3`, `mistral`, or `gemma`.
-    - For image support: `llava` or `llama3.2-vision`.
-3.  **Telegram Bot Token**:
-    - Create a bot via [@BotFather](https://t.me/BotFather) on Telegram and get your token.
-    - Get your Chat ID (you can use [@userinfobot](https://t.me/userinfobot)).
+```
+├── config/             # Configuration files
+│   ├── config.yaml     # Main configuration (API keys, settings)
+│   └── __init__.py     # Config loader
+├── debug/              # Debugging & Test scripts
+│   ├── mock_erp.py     # Mock ERP server for testing
+│   └── test_erp.py     # Integration tests
+├── logs/               # Log files (Auto-rotated)
+│   └── monitor.log     # Main application log
+├── skills/             # Modular skill logic
+│   ├── erp.py          # ERP Client
+│   ├── web_monitor.py  # Website Change Detection
+│   ├── system_health.py# Server Monitoring
+│   ├── web_search.py   # Search & Summarization
+│   └── ...             # Other skills
+├── monitor.py          # Main entry point & Orchestrator
+├── database.py         # SQLite database management
+├── ai-assistant.service# Systemd service file
+└── requirements.txt    # Python dependencies
+```
 
 ---
 
-## 🛠️ Installation
+## � Installation & Setup
 
-### 1. Clone the Repository
+### 1. Prerequisites
+- **Python 3.10+**
+- **Ollama** installed and running (`ollama serve`).
+- **Telegram Bot Token** (from @BotFather).
+
+### 2. Clone & Install
 ```bash
 git clone https://github.com/yourusername/ai-assistant-bot.git
 cd ai-assistant-bot
-```
 
-### 2. Set up Virtual Environment
-It is recommended to use a virtual environment.
-
-**Linux / macOS:**
-```bash
+# Create Virtual Environment
 python3 -m venv venv
 source venv/bin/activate
-```
 
-**Windows (PowerShell):**
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
-
-### 3. Install Dependencies
-```bash
+# Install Dependencies
 pip install -r requirements.txt
 ```
 
-### 4. Configuration
-Create a `config.yaml` file in the root directory. You can copy the structure below:
-
-```yaml
-telegram:
-  bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
-  chat_id: "YOUR_TELEGRAM_CHAT_ID"
-
-monitoring:
-  check_interval_seconds: 300
-  websites:
-    - "https://example.com"
-    - "https://another-site.com"
-
-ollama:
-  model: "llama3" # or 'mistral', 'gemma', etc.
+### 3. Configuration
+Move the example config and edit it:
+```bash
+cp config/config.yaml.example config/config.yaml
+nano config/config.yaml
 ```
+Key settings:
+- `telegram.bot_token`: Your Bot Token.
+- `telegram.chat_id`: Your user ID (get from @userinfobot).
+- `monitoring.websites`: List of sites to watch.
+- `servers`: List of SSH servers to monitor.
 
 ---
 
-## 🏃‍♂️ Usage
+## 🏃‍♂️ Running the Bot
 
-### Linux / macOS
-Run the start script to launch the bot in the background:
-```bash
-./start.sh
-```
-To stop the bot:
-```bash
-./stop.sh
-```
+### ➤ Managed Service (Recommended)
+This installs the bot as a systemd service (`ai-assistant`), ensuring it starts on boot and restarts on failure.
 
-### Auto-Startup (Linux Systemd)
-To make the bot start automatically on boot:
+**Install:**
 ```bash
 sudo ./install_service.sh
 ```
-This will install `ai-assistant.service` and enable it.
 
-### Windows
-Run the Python script directly:
-```powershell
-python monitor.py
+**Manage:**
+```bash
+sudo systemctl start ai-assistant    # Start
+sudo systemctl stop ai-assistant     # Stop
+sudo systemctl restart ai-assistant  # Restart (Use this after code changes)
+sudo systemctl status ai-assistant   # Check status
+```
+
+> **⚠️ IMPORTANT:** Do not run `./start.sh` manually if the service is running! It will cause conflicts.
+
+### ➤ Manual Run (Debugging)
+If you need to debug or run without the service:
+```bash
+# Stop service first
+sudo systemctl stop ai-assistant
+
+# Run manually
+python3 monitor.py
 ```
 
 ---
 
-## 💬 Commands & Interactions
+## 💬 Usage Examples
 
-The bot is designed to understand **natural language**, so you don't always need slash commands.
-
-### 🗓️ Reminders
-- **Set**: "Remind me to deploy the app in 20 minutes."
-- **Recurring**: "Remind me every 30 seconds to take a break."
-- **Query**: "What reminders do I have tomorrow?"
-- **Cancel**: "Cancel all reminders" or "Cancel the reminder about milk."
-
-### 📝 Notes
-- **Add**: "Save a note: Storage server IP is 192.168.1.55"
-- **List**: "Show my notes" or `/notes`
-- **Slash Command**: `/note [content]` works too.
-
-### 🧠 Chat & Vision
-- Just send a message to chat! The bot remembers context.
-- Send a **photo** to analyze it (e.g., "What is in this picture?").
-
-### 🔍 Website Monitoring
-- The bot checks configured websites every 5 minutes (configurable).
-- You will receive a notification **only** if content changes, with a summary of what changed.
+| Feature | Command / Interaction |
+| :--- | :--- |
+| **Chat** | "How does a binary search work?" |
+| **Search** | "Search web for RTX 5090 release date." |
+| **Summarize** | "Summarize this video: https://youtu.be/..." |
+| **ERP** | "Show pending tasks." / "Search invoices for Acme." |
+| **System** | "System status." |
+| **Reminders** | "Remind me to backup DB in 2 hours." |
+| **Notes** | "Note: Buy milk." / "Show notes." |
 
 ---
 
 ## 🔧 Troubleshooting
 
-- **Bot not replying?**
-  - Check if `ollama serve` is running.
-  - Check `monitor.log` for errors.
-- **"Connection Refused" error?**
-  - Ensure Ollama is running on port 11434 (default).
-- **Date parsing issues?**
-  - Try to be specific, e.g., "in 10 minutes" rather than "later".
-
----
-
-## 📂 Project Structure
-
-- `monitor.py`: Core logic and AI intent classification.
-- `database.py`: SQLite database management.
-- `config.py`: Configuration loader.
-- `monitor.db`: Stores chat history, reminders, and website hashes.
-- `start.sh` / `stop.sh`: Service management scripts.
-
----
-
-**Enjoy your new personal AI Assistant! 🚀**
+- **Logs**: Check `logs/monitor.log` for errors.
+- **Service Status**: `sudo systemctl status ai-assistant`.
+- **Bot Conflict**: If you see "Conflict: terminated by other getUpdates request", ensure only **one** instance is running (check `ps aux | grep monitor.py`).
