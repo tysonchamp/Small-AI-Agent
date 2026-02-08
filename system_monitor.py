@@ -12,7 +12,7 @@ def check_local_health():
         
         return {
             "name": "Local System",
-            "cpu": cpu,
+            "cpu_percent": cpu,
             "ram_used": round(ram.used / (1024**3), 2),
             "ram_total": round(ram.total / (1024**3), 2),
             "ram_percent": ram.percent,
@@ -88,7 +88,7 @@ def check_ssh_health(server_config):
         
         return {
             "name": name,
-            "cpu": cpu_usage,
+            "cpu_percent": cpu_usage,
             "ram_used": round(ram_used / 1024, 2), # Convert MB to GB? No, free -m is MB. 
             "ram_total": round(ram_total / 1024, 2),
             "ram_percent": ram_percent,
@@ -109,8 +109,8 @@ def format_health_report(health_data):
         icon = "⚠️"
         
     report = f"{icon} *{health_data['name']}*\n"
-    if 'cpu' in health_data:
-        report += f"   • CPU: {health_data['cpu']}%\n"
+    if 'cpu_percent' in health_data:
+        report += f"   • CPU: {health_data['cpu_percent']}%\n"
     elif 'cpu_load' in health_data:
         report += f"   • Load: {health_data['cpu_load']}\n"
         

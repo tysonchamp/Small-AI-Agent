@@ -320,6 +320,8 @@ async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
 
 async def check_server_health_job(context: ContextTypes.DEFAULT_TYPE, report_all=False):
     import system_monitor
+    import importlib
+    importlib.reload(system_monitor)
     conf = config.load_config()
     chat_id = conf['telegram'].get('chat_id')
     
