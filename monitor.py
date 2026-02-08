@@ -55,8 +55,9 @@ def analyze_changes_with_ollama(old_content, new_content, model):
     if not old_content:
         return "Initial content fetch. No previous content to compare."
     
-    old_text = clean_html(old_content)[:4000]
-    new_text = clean_html(new_content)[:4000]
+    # Increased context limit to 30k chars to avoid truncation
+    old_text = clean_html(old_content)[:30000]
+    new_text = clean_html(new_content)[:30000]
     
     prompt = f"""
     You are a website monitoring assistant. Verify if there are meaningful changes between the old and new website content below.
@@ -149,7 +150,9 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
         if not current_content:
             continue
 
-        current_hash = get_content_hash(current_content)
+        # Calculate hash on CLEARED text to avoid hidden HTML changes (nonces, etc)
+        current_cleaned_text = clean_html(current_content)
+        current_hash = get_content_hash(current_cleaned_text)
         
         c.execute("SELECT content_hash, last_content FROM websites WHERE url=?", (url,))
         row = c.fetchone()
