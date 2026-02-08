@@ -798,6 +798,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📝 Notes (Type `/note content`)\n"
         "⏰ Reminders (Type `Remind me to...`)\n"
         "📸 Image Analysis\n",
+        "🌐 web search for real-time news, live prices, weather, or recent events (post-cutoff)\n",
+        "workflow, system health check (external servers, internal servers)\n",
         parse_mode='Markdown'
     )
 
