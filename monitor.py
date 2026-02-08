@@ -503,10 +503,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
        - url: the link to summarize
        - instruction: specific question about the content (optional)
 
-    9. "WEB_SEARCH": User asks a question requiring REAL-TIME external knowledge (news, sports, prices, "unknown" facts).
+    9. "WEB_SEARCH": Use ONLY for Real-Time News, Live Prices, Weather, or Recent Events (post-cutoff). DO NOT use for history, general facts, or cultural holidays.
        - query: the search query
     
-    10. "CHAT": General conversation, coding help, or image analysis.
+    10. "CHAT": General knowledge, history, cultural facts (e.g. "What is Valentine's Day?"), coding help, or image analysis.
     
     11. "CLEAR_MEMORY": User wants to clear chat history/memory.
 
