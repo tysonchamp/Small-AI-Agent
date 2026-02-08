@@ -366,12 +366,6 @@ async def check_server_health_job(context: ContextTypes.DEFAULT_TYPE, report_all
             await context.bot.send_message(chat_id=chat_id, text=full_report, parse_mode='Markdown')
         except Exception as e:
              logging.error(f"Error sending health report: {e}")
-            
-            if alert_needed:
-                await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
-                
-        except Exception as e:
-            logging.error(f"Error in server check job: {e}")
 
 
 # --- Chat & Assistant Logic ---
@@ -405,6 +399,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Content Fetching Logic ---
 
+def perform_web_search(query):
+    from ddgs import DDGS
+    try:
+        results = DDGS().text(query, max_results=5)
+        if not results:
+            return "No results found."
+        
+        summary = ""
+        for r in results:
+            summary += f"- [{r['title']}]({r['href']}): {r['body']}\n"
+        return summary
+    except Exception as e:
+        return f"Error performing search: {e}"
+
 def get_youtube_video_id(url):
     import re
     # Patterns: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/embed/ID
@@ -418,52 +426,7 @@ def get_youtube_video_id(url):
             return match.group(1)
     return None
 
-def fetch_youtube_transcript(url):
-    from youtube_transcript_api import YouTubeTranscriptApi
-    video_id = get_youtube_video_id(url)
-    if not video_id:
-        return None, "Could not extract video ID."
-    
-    try:
-        # 2026-02-08: Fixed API usage based on debug. Requires instantiation.
-        api = YouTubeTranscriptApi()
-        transcript = api.fetch(video_id)
-        # Combine text from snippets
-        full_text = " ".join([s.text for s in transcript])
-        return full_text, None
-    except Exception as e:
-        return None,str(e)
-
-def fetch_github_content(url):
-    # If it's a repo root, try to get README
-    # url: https://github.com/user/repo -> https://raw.githubusercontent.com/user/repo/master/README.md (or main)
-    # This is a bit heuristic. Better to use API but rate limits.
-    # For now, let's just attempt to fetch the URL as provided, if it's a blob, it works.
-    # If it's a tree, we might get HTML.
-    
-    # Simple heuristic: change github.com to raw.githubusercontent.com and remove /blob/
-    if "github.com" in url and "/blob/" in url:
-        raw_url = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
-        return get_website_content(raw_url), None
-    
-    return get_website_content(url), None
-
-def fetch_smart_content(url):
-    if "youtube.com" in url or "youtu.be" in url:
-        content, error = fetch_youtube_transcript(url)
-        if error:
-             return None, f"YouTube Error: {error}"
-        return f"YouTube Transcript:\n{content}", None
-        
-    elif "github.com" in url:
-        content = fetch_github_content(url)[0] # reuse requests logic
-        return f"GitHub Content:\n{content}", None
-        
-    else:
-        # General website
-        content = get_website_content(url)
-        cleaned = clean_html(content)
-        return f"Website Content:\n{cleaned}", None
+# ... (existing content logic) ...
 
 # --- Main Bot Logic ---
 
@@ -539,12 +502,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     8. "SUMMARIZE_CONTENT": User wants a summary of a Link (YouTube, GitHub, Web).
        - url: the link to summarize
        - instruction: specific question about the content (optional)
-    
-    9. "CHAT": General conversation, coding help, or image analysis.
-    
-    10. "CLEAR_MEMORY": User wants to clear chat history/memory.
 
-    11. "SYSTEM_STATUS": User asks about server/system health NOW.
+    9. "WEB_SEARCH": User asks a question requiring REAL-TIME external knowledge (news, sports, prices, "unknown" facts).
+       - query: the search query
+    
+    10. "CHAT": General conversation, coding help, or image analysis.
+    
+    11. "CLEAR_MEMORY": User wants to clear chat history/memory.
+
+    12. "SYSTEM_STATUS": User asks about server/system health NOW.
     
     Output Format:
     {{
@@ -553,10 +519,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }}
     
     Examples:
+    "Who won the Super Bowl?" -> {{"action": "WEB_SEARCH", "params": {{"query": "Super Bowl winner 2025"}}}}
+    "Price of Bitcoin" -> {{"action": "WEB_SEARCH", "params": {{"query": "current price of bitcoin"}}}}
     "Summarize this video: https://youtu.be/xyz" -> {{"action": "SUMMARIZE_CONTENT", "params": {{"url": "https://youtu.be/xyz"}}}}
-    "What does this repo do? https://github.com/foo/bar" -> {{"action": "SUMMARIZE_CONTENT", "params": {{"url": "https://github.com/foo/bar", "instruction": "What does this repo do?"}}}}
-    "Remind me every 30s to check logs" -> {{"action": "ADD_REMINDER", "params": {{"content": "check logs", "time": "in 0s", "interval_seconds": 30}}}}
-    "Send me a morning briefing every day at 8am" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "BRIEFING", "time": "8:00 AM", "interval_seconds": 86400}}}}
     """
     
     try:
@@ -582,7 +547,42 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # --- EXECUTE ACTION ---
         
-        if action == "SUMMARIZE_CONTENT":
+        if action == "WEB_SEARCH":
+            query = params.get("query")
+            await update.message.reply_text(f"🔍 Searching the web for: '{query}'...")
+            
+            search_results = await loop.run_in_executor(None, perform_web_search, query)
+            
+            # Synthesize answer
+            synth_prompt = f"""
+            You are a helpful assistant. Use the following search results to answer the user's question.
+            
+            Question: {user_message}
+            
+            Search Results:
+            {search_results}
+            
+            Provide a concise and accurate answer with citations (URLs) where appropriate.
+            """
+            
+            await context.bot.send_chat_action(chat_id=chat_id, action='typing')
+            
+            ai_response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=[
+                {'role': 'user', 'content': synth_prompt}
+            ]))
+            
+            response_text = ai_response['message']['content']
+            
+            # Chunking and Robust Sending
+            chunk_size = 4000
+            for i in range(0, len(response_text), chunk_size):
+                chunk = response_text[i:i + chunk_size]
+                try:
+                    await update.message.reply_text(chunk, parse_mode='Markdown')
+                except Exception:
+                    await update.message.reply_text(chunk)
+
+        elif action == "SUMMARIZE_CONTENT":
             url = params.get("url")
             instruction = params.get("instruction", "Summarize this content effectively.")
             
@@ -777,7 +777,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=messages_payload))
             bot_reply = response['message']['content']
             
-            await update.message.reply_text(bot_reply, parse_mode='Markdown')
+            try:
+                await update.message.reply_text(bot_reply, parse_mode='Markdown')
+            except Exception:
+                await update.message.reply_text(bot_reply)
+                
             database.add_chat_message('assistant', bot_reply)
 
     except Exception as e:
