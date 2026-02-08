@@ -126,12 +126,16 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
     
     chat_id = conf['telegram'].get('chat_id')
     model = conf['ollama'].get('model', 'llama3')
+    
+    # Get the running loop for executor
+    loop = asyncio.get_running_loop()
 
     for url in conf['monitoring']['websites']:
         logging.info(f"Checking {url}...")
         
         try:
-            current_content = get_website_content(url)
+            # Run blocking request in a separate thread
+            current_content = await loop.run_in_executor(None, get_website_content, url)
         except Exception as e:
             error_msg = f"⚠️ *Error Monitoring Website* \n\nURL: {url}\n\nError: `{str(e)}`"
             logging.error(f"Error checking {url}: {e}")
@@ -159,7 +163,10 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
             logging.info(f"Change detected for {url}!")
             old_content = row[1]
             
-            analysis = analyze_changes_with_ollama(old_content, current_content, model)
+            # analyze_changes_with_ollama involves network calls to Ollama too (requests to localhost)
+            # ideally this should also be async or threaded, but it's less likely to hang for long than external sites.
+            # strict correctness: threaded.
+            analysis = await loop.run_in_executor(None, analyze_changes_with_ollama, old_content, current_content, model)
             
             if analysis:
                 msg = f"📢 *Website Change Detected!* \n\nURL: {url}\n\nAI Analysis:\n{analysis}"
