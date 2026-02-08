@@ -375,6 +375,101 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"⚠️ Error downloading image: {e}")
             return
 
+# --- Content Fetching Logic ---
+
+def get_youtube_video_id(url):
+    import re
+    # Patterns: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/embed/ID
+    patterns = [
+        r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+        r'(?:embed\/|v\/|watch\?v=|youtu\.be\/|\/v\/)([^#\&\?]*).*'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+def fetch_youtube_transcript(url):
+    from youtube_transcript_api import YouTubeTranscriptApi
+    video_id = get_youtube_video_id(url)
+    if not video_id:
+        return None, "Could not extract video ID."
+    
+    try:
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+        # Combine text
+        full_text = " ".join([t['text'] for t in transcript_list])
+        return full_text, None
+    except Exception as e:
+        return None,str(e)
+
+def fetch_github_content(url):
+    # If it's a repo root, try to get README
+    # url: https://github.com/user/repo -> https://raw.githubusercontent.com/user/repo/master/README.md (or main)
+    # This is a bit heuristic. Better to use API but rate limits.
+    # For now, let's just attempt to fetch the URL as provided, if it's a blob, it works.
+    # If it's a tree, we might get HTML.
+    
+    # Simple heuristic: change github.com to raw.githubusercontent.com and remove /blob/
+    if "github.com" in url and "/blob/" in url:
+        raw_url = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+        return get_website_content(raw_url), None
+    
+    return get_website_content(url), None
+
+def fetch_smart_content(url):
+    if "youtube.com" in url or "youtu.be" in url:
+        content, error = fetch_youtube_transcript(url)
+        if error:
+             return None, f"YouTube Error: {error}"
+        return f"YouTube Transcript:\n{content}", None
+        
+    elif "github.com" in url:
+        content = fetch_github_content(url)[0] # reuse requests logic
+        return f"GitHub Content:\n{content}", None
+        
+    else:
+        # General website
+        content = get_website_content(url)
+        cleaned = clean_html(content)
+        return f"Website Content:\n{cleaned}", None
+
+# --- Main Bot Logic ---
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Debug log for ANY update
+    logging.info(f"Update received: {update}")
+    
+    if not update.message:
+        return
+
+    user_message = update.message.text
+    chat_id = str(update.message.chat_id)
+    
+    # Handle Image Analysis
+    images = []
+    if update.message.photo:
+        # Get largest photo
+        try:
+             photo_file = await update.message.photo[-1].get_file()
+             import io
+             img_byte_arr = io.BytesIO()
+             await photo_file.download_to_memory(img_byte_arr)
+             images.append(img_byte_arr.getvalue())
+             # If no caption, treat as "Describe this"
+             if not user_message:
+                 user_message = update.message.caption or "Describe this image."
+        except Exception as e:
+             logging.error(f"Error downloading photo: {e}")
+             await update.message.reply_text("Failed to process image.")
+             return
+
+    logging.info(f"Processing message from {chat_id}: {user_message}")
+    
+    conf = config.load_config()
+    model = conf['ollama'].get('model', 'llama3')
+
     # --- Intelligent Intent Classification ---
     import json
     
@@ -411,11 +506,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     7. "NOTE_LIST": User wants to see notes.
     
-    8. "CHAT": General conversation, coding help, or image analysis.
+    8. "SUMMARIZE_CONTENT": User wants a summary of a Link (YouTube, GitHub, Web).
+       - url: the link to summarize
+       - instruction: specific question about the content (optional)
     
-    9. "CLEAR_MEMORY": User wants to clear chat history/memory.
+    9. "CHAT": General conversation, coding help, or image analysis.
+    
+    10. "CLEAR_MEMORY": User wants to clear chat history/memory.
 
-    10. "SYSTEM_STATUS": User asks about server/system health NOW.
+    11. "SYSTEM_STATUS": User asks about server/system health NOW.
     
     Output Format:
     {{
@@ -424,10 +523,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }}
     
     Examples:
+    "Summarize this video: https://youtu.be/xyz" -> {{"action": "SUMMARIZE_CONTENT", "params": {{"url": "https://youtu.be/xyz"}}}}
+    "What does this repo do? https://github.com/foo/bar" -> {{"action": "SUMMARIZE_CONTENT", "params": {{"url": "https://github.com/foo/bar", "instruction": "What does this repo do?"}}}}
     "Remind me every 30s to check logs" -> {{"action": "ADD_REMINDER", "params": {{"content": "check logs", "time": "in 0s", "interval_seconds": 30}}}}
     "Send me a morning briefing every day at 8am" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "BRIEFING", "time": "8:00 AM", "interval_seconds": 86400}}}}
-    "Check system health every 1 hour" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "SYSTEM_HEALTH", "time": "now", "interval_seconds": 3600}}}}
-    "What workflows are running?" -> {{"action": "LIST_WORKFLOWS", "params": {{}}}}
     """
     
     try:
@@ -453,7 +552,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # --- EXECUTE ACTION ---
         
-        if action == "SCHEDULE_WORKFLOW":
+        if action == "SUMMARIZE_CONTENT":
+            url = params.get("url")
+            instruction = params.get("instruction", "Summarize this content effectively.")
+            
+            await update.message.reply_text(f"🔍 Fetching and analyzing content from: {url}...")
+            
+            # Run fetch in executor
+            content_text, error = await loop.run_in_executor(None, fetch_smart_content, url)
+            
+            if error:
+                 await update.message.reply_text(f"⚠️ Error fetching content: {error}")
+            else:
+                 # Summarize with Ollama
+                 summary_prompt = f"""
+                 You are a helpful research assistant.
+                 
+                 Task: {instruction}
+                 
+                 Content:
+                 {content_text[:20000]} 
+                 """
+                 # Truncate content to avoid context limits (20k chars is safe for most ~32k context models, or 8k)
+                 
+                 await context.bot.send_chat_action(chat_id=chat_id, action='typing')
+                 
+                 summary_response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=[
+                     {'role': 'user', 'content': summary_prompt}
+                 ]))
+                 
+                 await update.message.reply_text(summary_response['message']['content'], parse_mode='Markdown')
+
+        elif action == "SCHEDULE_WORKFLOW":
             w_type = params.get("type")
             w_time_str = params.get("time")
             w_interval = params.get("interval_seconds", 0)
