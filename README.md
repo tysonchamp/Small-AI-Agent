@@ -136,6 +136,20 @@ python3 monitor.py
 
 ---
 
+## 🌐 Web Interface
+
+The bot includes a rich web-based dashboard for easier management.
+
+**URL**: `http://<YOUR_SERVER_IP>:8000/dashboard`
+
+### Features
+- **Dashboard**: Real-time view of Server Health (CPU/RAM/Disk/Uptime) and Website Status.
+- **System Logs**: Live-streaming logs from the bot's background processes.
+- **Database Viewer**: Browse and search through your SQLite database tables (Notes, Reminders, Websites).
+- **Web Chat**: A full-featured chat interface to interact with the AI from your browser.
+
+---
+
 ## 💬 Usage Examples
 
 | Feature | Command / Interaction |

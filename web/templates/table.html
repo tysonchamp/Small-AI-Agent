@@ -8,13 +8,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #f3f4f6;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --text-secondary: #6b7280;
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --border: #e5e7eb;
+            --bg-color: #111827;
+            --card-bg: #1f2937;
+            --text-main: #f9fafb;
+            --text-secondary: #9ca3af;
+            --primary: #6366f1;
+            --primary-hover: #818cf8;
+            --border: #374151;
         }
 
         body {
@@ -69,12 +69,14 @@
         }
 
         .nav-link:hover {
-            background-color: #f9fafb;
+            background-color: #374151;
+            /* Darker hover */
         }
 
         .nav-link.active {
-            background-color: #eef2ff;
-            color: var(--primary);
+            background-color: #312e81;
+            /* Dark indigo */
+            color: #818cf8;
             font-weight: 500;
         }
 
@@ -119,7 +121,8 @@
         th {
             text-align: left;
             padding: 0.75rem 1rem;
-            background-color: #f9fafb;
+            background-color: #111827;
+            /* Darker header */
             color: var(--text-secondary);
             font-weight: 600;
             border-bottom: 1px solid var(--border);
@@ -161,7 +164,7 @@
         .btn {
             padding: 0.375rem 0.75rem;
             border: 1px solid var(--border);
-            background-color: white;
+            background-color: var(--card-bg);
             border-radius: 0.375rem;
             color: var(--text-main);
             text-decoration: none;
@@ -170,8 +173,8 @@
         }
 
         .btn:hover {
-            border-color: #d1d5db;
-            background-color: #f9fafb;
+            border-color: #6b7280;
+            background-color: #374151;
         }
 
         .btn.disabled {
