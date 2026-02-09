@@ -58,9 +58,22 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/notes - List your notes\n"
         "/reminders - List active reminders\n"
         "/status - Check system health\n"
-        "/dashboard - Get Web Dashboard link",
+        "/status - Check system health\n"
+        "/dashboard - Get Web Dashboard link\n"
+        "/workflows - List active system workflows",
         parse_mode='Markdown'
     )
+
+async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🌐 *Web Dashboard*: http://<YOUR_IP>:8000/dashboard\n"
+        "💬 *Chat Interface*: http://<YOUR_IP>:8000/chat",
+        parse_mode='Markdown'
+    )
+
+async def workflows_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = workflows.handle_list_workflows()
+    await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Debug log for ANY update
@@ -381,7 +394,8 @@ async def post_init(application: Application):
         ("notes", "Show your notes"),
         ("reminders", "Show your reminders"),
         ("status", "Check system status"),
-        ("dashboard", "Get link to Web Dashboard")
+        ("dashboard", "Get link to Web Dashboard"),
+        ("workflows", "List active system workflows")
     ])
 
 def main():
@@ -408,6 +422,8 @@ def main():
     application.add_handler(CommandHandler('notes', notes.handle_notes_command))
     application.add_handler(CommandHandler('reminders', reminders.handle_reminders_command))
     application.add_handler(CommandHandler('status', system_health.handle_status_command))
+    application.add_handler(CommandHandler('dashboard', dashboard_command))
+    application.add_handler(CommandHandler('workflows', workflows_command))
     
     application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & (~filters.COMMAND), handle_message))
     
