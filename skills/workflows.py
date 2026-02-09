@@ -156,17 +156,32 @@ async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"Error in workflow {w.get('id')}: {e}")
 
-async def handle_schedule_workflow(w_type, time_str, interval=0):
-    dt = dateparser.parse(time_str, settings={'PREFER_DATES_FROM': 'future'})
+@registry.skill(name="SCHEDULE_WORKFLOW", description="Schedule a recurring task. Params: type, time (e.g. 'tomorrow at 9am'), interval_seconds")
+async def schedule_workflow(type: str, time: str, interval_seconds: int = 0):
+    dt = dateparser.parse(time, settings={'PREFER_DATES_FROM': 'future'})
     if not dt:
-        dt = datetime.now() # Default to start now if parsing fails
+        # Try to parse relative time "in 5 minutes", "every hour"
+        # For now, default to now if fail, or return error?
+        # User might say "every hour", let's assume 'now' start.
+        dt = datetime.now() 
 
-    database.add_workflow(w_type, {}, interval, dt)
+    database.add_workflow(type, {}, interval_seconds, dt)
     
-    resp = f"✅ Scheduled *{w_type}* starting at {dt.strftime('%Y-%m-%d %H:%M:%S')}"
-    if interval > 0:
-        resp += f" (Runs every {interval}s)"
+    resp = f"✅ Scheduled *{type}* starting at {dt.strftime('%Y-%m-%d %H:%M:%S')}"
+    if interval_seconds > 0:
+        resp += f" (Runs every {interval_seconds}s)"
     return resp
+
+@registry.skill(name="LIST_WORKFLOWS", description="List active scheduled workflows.")
+def list_workflows():
+    workflows = database.get_active_workflows()
+    if not workflows:
+        return "📭 No active system workflows."
+    else:
+        msg = "*⚙️ Active Workflows:*\n"
+        for w in workflows:
+            msg += f"- *{w['id']}* [{w['type']}]: Next run {w['next_run_time']} (Interval: {w['interval_seconds']}s)\n"
+        return msg
 
 
 @registry.skill(name="CANCEL_WORKFLOW", description="Cancel/Delete a scheduled workflow. Params: workflow_id (int) OR workflow_type (str).")

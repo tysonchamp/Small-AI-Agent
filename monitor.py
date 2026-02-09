@@ -120,66 +120,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Analyze the user's message and determine the optimal action.
     Return ONLY a JSON object.
     
-    Possible Actions:
-    1. "ADD_REMINDER": User wants to set a reminder (simple text alert).
-       - content: what to remind
-       - time: natural language time
-       - interval_seconds: 0 for one-time, >0 for recurring
+    1. "CHAT": General knowledge, history, cultural facts, or coding help.
     
-    2. "SCHEDULE_WORKFLOW": User wants to schedule a SYSTEM TASK.
-{workflows.get_workflow_descriptions()}
-       - time: when to start (e.g. "at 8am", "now")
-       - interval_seconds: frequency (e.g. "every 24h" = 86400, "every 1h" = 3600). 0 if one-off.
-    
-    3. "LIST_WORKFLOWS": User wants to see active scheduled system tasks.
-    
-    4. "CANCEL_REMINDER": User wants to cancel reminders.
-       - target: "all" or specific keywords
-    
-    5. "QUERY_SCHEDULE": User asks about their schedule/reminders.
-       - time_range: "today", "tomorrow", "all"
-    
-    6. "NOTE_ADD": User wants to save a note.
-       - content: note content
-    
-    7. "NOTE_LIST": User wants to see notes.
-    
-    8. "SUMMARIZE_CONTENT": User wants a summary of a Link (YouTube, GitHub, Web).
-       - url: the link to summarize
-       - instruction: specific question about the content (optional)
-
-    9. "WEB_SEARCH": Use ONLY for Real-Time News, Live Prices, Weather, or Recent Events (post-cutoff). DO NOT use for history, general facts, or cultural holidays.
-       - query: the search query
-    
-    10. "CHAT": General knowledge, history, cultural facts (e.g. "What is Valentine's Day?"), coding help, or image analysis.
-    
-    11. "CLEAR_MEMORY": User wants to clear chat history/memory.
-
-    12. "SYSTEM_STATUS": User asks about server/system health NOW.
-
-    13. "ERP_TASKS": User wants to see pending tasks from the ERP.
-    14. "ERP_INVOICES": User wants to see due invoices or a summary.
-        - type: "due" or "summary"
-    
-    15. "ERP_CREDENTIALS": User wants to see project credentials.
-        - search: optional keyword (e.g. "vps", "aws")
-    
-    16. "ERP_SEARCH_INVOICES": User wants to search invoices by customer name OR ID.
-        - customer_name: name to search
-        - customer_id: precise ID
-
-    --- DYNAMIC SKILLS ---
+    --- AVAILABLE SKILLS ---
 {registry.get_system_prompt_tools()}
-    ----------------------
-    14. "ERP_INVOICES": User wants to see due invoices or a summary.
-        - type: "due" or "summary"
-    
-    15. "ERP_CREDENTIALS": User wants to see project credentials.
-        - search: optional keyword (e.g. "vps", "aws")
-    
-    16. "ERP_SEARCH_INVOICES": User wants to search invoices by customer name OR ID.
-        - customer_name: name to search
-        - customer_id: precise ID
+    ------------------------
 
     Output Format:
     {{
@@ -249,130 +194,54 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # --- EXECUTE ACTION ---
         response_text = ""
         
-        if action == "WEB_SEARCH":
-            query = params.get("query")
-            response_text = await web_search.handle_web_search(update, context, query)
-
-        elif action == "SUMMARIZE_CONTENT":
-            url = params.get("url")
-            instruction = params.get("instruction", "Summarize this content effectively.")
-            response_text = await web_search.handle_summarize_content(update, context, url, instruction)
-
-        elif action == "SCHEDULE_WORKFLOW":
-            response_text = await workflows.handle_schedule_workflow(
-                params.get("type"), 
-                params.get("time"), 
-                params.get("interval_seconds", 0)
-            )
-            await update.message.reply_text(response_text, parse_mode='Markdown')
-
-        elif action == "LIST_WORKFLOWS":
-            response_text = workflows.handle_list_workflows()
-            await update.message.reply_text(response_text, parse_mode='Markdown')
-
-        elif action == "CANCEL_WORKFLOW":
-            response_text = workflows.cancel_workflow(
-                workflow_id=params.get("workflow_id"), 
-                workflow_type=params.get("workflow_type")
-            )
-            await update.message.reply_text(response_text)
-
-        elif action == "ADD_REMINDER":
-            response_text = await reminders.handle_add_reminder(
-                chat_id, 
-                params.get("content"), 
-                params.get("time"), 
-                params.get("interval_seconds", 0)
-            )
-            await update.message.reply_text(response_text)
-
-        elif action == "CANCEL_REMINDER":
-            response_text = await reminders.handle_cancel_reminder(chat_id, params.get("target"))
-            await update.message.reply_text(response_text)
-
-        elif action == "QUERY_SCHEDULE":
-            response_text = await reminders.handle_query_schedule(chat_id, params.get("time_range"))
-            await update.message.reply_text(response_text, parse_mode='Markdown')
-
-        elif action == "NOTE_ADD":
-            response_text = notes.handle_add_note(params.get("content"))
-            await update.message.reply_text(response_text)
-
-        elif action == "NOTE_LIST":
-            response_text = notes.handle_list_notes()
-            await update.message.reply_text(response_text, parse_mode='Markdown')
-
-        elif action == "CLEAR_MEMORY":
+        if action == "CLEAR_MEMORY":
             database.clear_chat_history()
             await update.message.reply_text("🧹 Memory cleared! I have forgotten our previous conversation.")
 
-        elif action == "SYSTEM_STATUS":
-             await update.message.reply_text("🔍 Checking system status...")
-             # Re-import to allow hot-reloading if we edit system_health (though less likely with skills split)
-             import importlib
-             importlib.reload(system_health)
-             
-             report = system_health.get_system_status(conf)
-             await update.message.reply_text(report, parse_mode='Markdown')
-
-        elif action == "STATUS":
-            # This seems to be a duplicate or alternative to SYSTEM_STATUS, using a different function.
-            # Assuming system_health.get_system_health() is intended here.
-            # If system_health.get_system_status(conf) is the correct one, this block might need adjustment.
-            # For now, I'll use the provided code.
-            msg = system_health.get_system_health()
-            await update.message.reply_text(msg, parse_mode='Markdown')
-        
         elif action == "DASHBOARD":
             await update.message.reply_text("🌐 *Web Dashboard*: http://<YOUR_IP>:8000/dashboard", parse_mode='Markdown')
 
-        elif action == "ERP_TASKS":
-            await update.message.reply_text("📋 Fetching pending tasks...")
-            msg = await loop.run_in_executor(None, erp.get_pending_tasks)
-            await update.message.reply_text(msg, parse_mode='Markdown')
-
-        elif action == "ERP_INVOICES":
-            req_type = params.get('type', 'due')
-            if req_type == 'summary':
-                await update.message.reply_text("📊 Fetching invoice summary...")
-                msg = await loop.run_in_executor(None, erp.get_invoice_summary)
-            else:
-                await update.message.reply_text("💰 Fetching due invoices...")
-                msg = await loop.run_in_executor(None, erp.get_due_invoices)
+        elif action in registry.TOOLS:
+            tool_def = registry.TOOLS[action]
+            func = tool_def["func"]
             
-            await update.message.reply_text(msg, parse_mode='Markdown')
+            # Introspection
+            import inspect
+            import functools
+            sig = inspect.signature(func)
+            call_kwargs = {}
+            for param_name in sig.parameters:
+                if param_name in params:
+                    call_kwargs[param_name] = params[param_name]
+                elif param_name == "chat_id":
+                    call_kwargs["chat_id"] = chat_id
+                elif param_name == "update":
+                    call_kwargs["update"] = update
+                elif param_name == "context":
+                    call_kwargs["context"] = context
 
-        elif action == "ERP_CREDENTIALS":
-            search_query = params.get('search')
-            if search_query:
-                await update.message.reply_text(f"🔐 Searching credentials for '{search_query}'...")
-                msg = await loop.run_in_executor(None, erp.get_credentials, search_query)
-            else:
-                await update.message.reply_text("🔐 Fetching all credentials...")
-                msg = await loop.run_in_executor(None, erp.get_credentials)
-            await update.message.reply_text(msg, parse_mode='Markdown')
-            
-        elif action == "ERP_SEARCH_INVOICES":
-             customer_name = params.get('customer_name')
-             customer_id = params.get('customer_id')
-             if not customer_name and not customer_id:
-                 await update.message.reply_text("❓ Please specify a customer name or ID.")
-             else:
-                 await update.message.reply_text(f"🔎 Searching invoices...")
-                 msg = await loop.run_in_executor(None, erp.search_invoices, customer_name, customer_id)
-                 await update.message.reply_text(msg, parse_mode='Markdown')
+            logging.info(f"Executing Skill: {action}")
+            await update.message.reply_text(f"⚡ Executing {action}...", disable_notification=True)
 
-        elif action == "WEB_SEARCH" or action == "SUMMARIZE_CONTENT":
-             # Already handled above and populated response_text.
-             # Need to chunk and send.
-             if response_text:
-                 chunk_size = 4000
-                 for i in range(0, len(response_text), chunk_size):
-                     chunk = response_text[i:i + chunk_size]
-                     try:
-                         await update.message.reply_text(chunk, parse_mode='Markdown')
-                     except Exception:
-                         await update.message.reply_text(chunk)
+            try:
+                if inspect.iscoroutinefunction(func):
+                    response_text = await func(**call_kwargs)
+                else:
+                    response_text = await loop.run_in_executor(None, functools.partial(func, **call_kwargs))
+                
+                # Chunking
+                response_text = str(response_text)
+                if response_text:
+                    chunk_size = 4000
+                    for i in range(0, len(response_text), chunk_size):
+                        chunk = response_text[i:i + chunk_size]
+                        try:
+                            await update.message.reply_text(chunk, parse_mode='Markdown')
+                        except Exception:
+                            await update.message.reply_text(chunk)
+            except Exception as e:
+                logging.error(f"Skill execution failed: {e}", exc_info=True)
+                await update.message.reply_text(f"⚠️ Skill Error: {e}")
 
         else: # CHAT or fallback
             # Normal chat logic with memory

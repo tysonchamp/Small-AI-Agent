@@ -148,10 +148,21 @@ def format_health_report(health_data):
     
     return report
 
-def get_system_status(config):
+from skills.registry import skill
+
+@skill(name="SYSTEM_STATUS", description="Check comprehensive system health (Local + SSH).")
+def get_system_status(conf=None):
+    if not conf:
+        conf = config.load_config()
+    
     # Backward compatibility for string report
-    reports = get_all_system_health(config)
+    reports = get_all_system_health(conf)
     return "\n".join([format_health_report(r) for r in reports])
+
+@skill(name="STATUS", description="Check local system health only.")
+def get_local_status():
+    local = check_local_health()
+    return f"*🖥️ Local Status:*\n{format_health_report(local)}"
 
 def get_all_system_health(config):
     """Returns a list of health dictionaries for all configured servers."""

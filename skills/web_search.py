@@ -77,22 +77,29 @@ def fetch_smart_content(url):
     except Exception as e:
         return (None, f"Error in fetch_smart_content: {e}")
 
-async def handle_web_search(update, context, query):
+from skills.registry import skill
+
+@skill(name="WEB_SEARCH", description="Search the web for real-time info. Params: query")
+async def web_search(query):
+    # loop = asyncio.get_running_loop() # Not needed if we await run_in_executor here or let dispatcher handle it.
+    # Actually, we can just use the sync perform_web_search in executor if we want, or make this sync.
+    # But perform_web_search is sync blocking.
+    import asyncio
     loop = asyncio.get_running_loop()
-    chat_id = update.effective_chat.id
+    
     conf = config.load_config()
     model = conf['ollama'].get('model', 'llama3')
 
-    await update.message.reply_text(f"🔍 Searching the web for: '{query}'...")
+    # We cannot send "Searching..." message here effectively if we return string. 
+    # The dispatcher should handle "Processing..." or user won't know? 
+    # For now, we return the result.
     
     search_results = await loop.run_in_executor(None, perform_web_search, query)
     
-    # Synthesize answer
     synth_prompt = f"""
     You are a helpful assistant. Use the following search results to answer the user's question.
     
     Question: {query} 
-    (Note: The user likely asked a question that led to this search)
     
     Search Results:
     {search_results}
@@ -100,29 +107,25 @@ async def handle_web_search(update, context, query):
     Provide a concise and accurate answer with citations (URLs) where appropriate.
     """
     
-    await context.bot.send_chat_action(chat_id=chat_id, action='typing')
-    
     ai_response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=[
         {'role': 'user', 'content': synth_prompt}
     ]))
     
     return ai_response['message']['content']
 
-async def handle_summarize_content(update, context, url, instruction):
+@skill(name="SUMMARIZE_CONTENT", description="Summarize a URL (video/page). Params: url, instruction (optional)")
+async def summarize_content(url, instruction="Summarize this content effectively."):
+    import asyncio
     loop = asyncio.get_running_loop()
-    chat_id = update.effective_chat.id
+    
     conf = config.load_config()
     model = conf['ollama'].get('model', 'llama3')
-
-    await update.message.reply_text(f"🔍 Fetching and analyzing content from: {url}...")
     
-    # Run fetch in executor
     content_text, error = await loop.run_in_executor(None, fetch_smart_content, url)
     
     if error:
          return f"⚠️ Error fetching content: {error}"
     else:
-         # Summarize with Ollama
          summary_prompt = f"""
          You are an expert content analyst. 
          The following text is the content of a website or video transcript.
@@ -130,17 +133,13 @@ async def handle_summarize_content(update, context, url, instruction):
          Your specific task: "{instruction}"
          
          Guidelines:
-         - Focus ONLY on the subject matter (products, features, news, concepts).
-         - Do NOT evaluate the quality of the text/transcript.
-         - Do NOT sound like you are giving feedback to a writer.
-         - Provide a clear, bulleted summary of what the content is ABOUT.
+         - Focus ONLY on the subject matter.
+         - Do NOT evaluate the quality.
+         - Provide a clear, bulleted summary.
          
          Content to Analyze:
          {content_text[:20000]} 
          """
-         # Truncate content to avoid context limits
-         
-         await context.bot.send_chat_action(chat_id=chat_id, action='typing')
          
          summary_response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=[
              {'role': 'user', 'content': summary_prompt}

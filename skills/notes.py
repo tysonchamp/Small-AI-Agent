@@ -17,11 +17,15 @@ async def handle_notes_command(update: Update, context: ContextTypes.DEFAULT_TYP
     msg = handle_list_notes()
     await update.message.reply_text(msg, parse_mode='Markdown')
 
-def handle_add_note(content):
+from skills.registry import skill
+
+@skill(name="NOTE_ADD", description="Save a note. Params: content")
+def add_note(content):
     database.add_note(content)
     return "✅ Note saved."
 
-def handle_list_notes(limit=10):
+@skill(name="NOTE_LIST", description="List recent notes. Params: limit (default 10)")
+def list_notes(limit=10):
     notes = database.get_notes(limit=limit)
     if not notes:
         return "No notes found."

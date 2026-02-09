@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 
 import config
 import database
+import yaml
 
 def get_website_content(url):
     import requests
@@ -192,3 +193,55 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
             logging.info(f"No changes for {url}.")
             
     conn.close()
+
+from skills.registry import skill
+
+@skill(name="LIST_WEBSITES", description="List monitored websites.")
+def list_websites():
+    conf = config.load_config()
+    sites = conf['monitoring'].get('websites', [])
+    if not sites:
+        return "📭 No websites are being monitored."
+    
+    msg = "*🌐 Monitored Websites:*\n"
+    
+    # Enrich with status from DB
+    conn = database.get_connection()
+    c = conn.cursor()
+    for url in sites:
+        c.execute("SELECT status_code, last_checked, last_error FROM websites WHERE url=?", (url,))
+        row = c.fetchone()
+        status = "Unknown"
+        if row:
+            if row[2]: # last_error
+                status = f"❌ Error: {row[2]}"
+            elif row[0]: # status_code
+                status = f"✅ {row[0]}"
+            msg += f"- {url} ({status})\n"
+        else:
+             msg += f"- {url} (Pending check)\n"
+    conn.close()
+    return msg
+
+@skill(name="ADD_WEBSITE", description="Add a website to monitor. Params: url")
+def add_website(url: str):
+    # This involves updating config.yaml which might be complex if it's not designed for programmatic edits.
+    # But we can try loading, appending, and saving.
+    try:
+        with open('config/config.yaml', 'r') as f:
+            raw_conf = yaml.safe_load(f)
+        
+        if 'monitoring' not in raw_conf:
+            raw_conf['monitoring'] = {'websites': []}
+            
+        if url not in raw_conf['monitoring']['websites']:
+            raw_conf['monitoring']['websites'].append(url)
+            
+            with open('config/config.yaml', 'w') as f:
+                yaml.dump(raw_conf, f)
+            return f"✅ Added {url} to monitoring list."
+        else:
+            return f"⚠️ {url} is already being monitored."
+            
+    except Exception as e:
+        return f"⚠️ Failed to update config: {e}"

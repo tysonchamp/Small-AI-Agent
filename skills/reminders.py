@@ -32,26 +32,30 @@ async def check_reminders_job(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"Failed to send reminder {r_id}: {e}")
 
-async def handle_add_reminder(chat_id, content, time_str, interval=0):
-    dt = dateparser.parse(time_str, settings={'PREFER_DATES_FROM': 'future'})
+from skills.registry import skill
+
+@skill(name="ADD_REMINDER", description="Set a reminder. Params: content, time, interval_seconds")
+async def add_reminder(chat_id, content, time, interval_seconds=0):
+    dt = dateparser.parse(time, settings={'PREFER_DATES_FROM': 'future'})
     
     # Fallback logic
-    if not dt and time_str and ("in" in time_str or "every" in time_str):
+    if not dt and time and ("in" in time or "every" in time):
             pass # dateparser usually handles "in X" well.
     
-    if not dt and interval > 0:
-            dt = datetime.now() + timedelta(seconds=interval)
+    if not dt and interval_seconds > 0:
+            dt = datetime.now() + timedelta(seconds=interval_seconds)
     
     if dt:
-        database.add_reminder(chat_id, content, dt, interval)
+        database.add_reminder(chat_id, content, dt, interval_seconds)
         resp = f"✅ Reminder set: '{content}' at {dt.strftime('%H:%M:%S')}"
-        if interval > 0:
-            resp += f" (Every {interval}s)"
+        if interval_seconds > 0:
+            resp += f" (Every {interval_seconds}s)"
         return resp
     else:
         return f"❓ Couldn't parse time for reminder: '{content}'"
 
-async def handle_cancel_reminder(chat_id, target):
+@skill(name="CANCEL_REMINDER", description="Cancel reminders. Params: target ('all' or search text)")
+async def cancel_reminder(chat_id, target):
     if target == "all":
         count = database.delete_all_pending_reminders(chat_id)
         return f"🗑️ Cancelled {count} pending reminders."
@@ -65,7 +69,8 @@ async def handle_cancel_reminder(chat_id, target):
                 database.delete_reminder(r[0])
             return f"🗑️ Cancelled {len(reminders)} reminders matching '{target}'."
 
-async def handle_query_schedule(chat_id, time_range):
+@skill(name="QUERY_SCHEDULE", description="Check upcoming reminders. Params: time_range ('all' or 'tomorrow')")
+async def query_schedule(chat_id, time_range="all"):
     # Determine start/end time based on range
     start_t = datetime.now()
     end_t = None

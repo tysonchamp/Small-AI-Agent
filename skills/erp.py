@@ -18,6 +18,7 @@ def get_headers():
     api_key = conf.get('API_KEY')
     return {"X-API-KEY": api_key}
 
+@skill(name="ERP_TASKS", description="Fetch pending tasks.")
 def get_pending_tasks():
     base_url = get_base_url()
     if not base_url:
@@ -51,7 +52,12 @@ def get_pending_tasks():
         return f"⚠️ Connection Error: {e}"
 
 @skill(name="ERP_INVOICES", description="Fetch due invoices. Params: type='due' (default) or 'summary'")
-def get_due_invoices(type="due"):
+def get_invoices_skill(type="due"):
+    if type == "summary":
+        return get_invoice_summary()
+    return get_due_invoices()
+
+def get_due_invoices():
     base_url = get_base_url()
     if not base_url:
         return "⚠️ ERP URL not configured."
@@ -138,15 +144,16 @@ def get_customer_invoices(customer_id):
         logging.error(f"Error fetching invoices for customer {customer_id}: {e}")
         return f"⚠️ Connection Error: {e}"
 
-def get_credentials(search_query=None):
+@skill(name="ERP_CREDENTIALS", description="Search/Show project credentials. Params: search (optional)")
+def get_credentials(search=None):
     base_url = get_base_url()
     if not base_url:
         return "⚠️ ERP URL not configured."
 
     url = f"{base_url}/credentials"
     params = {}
-    if search_query:
-        params['search'] = search_query
+    if search:
+        params['search'] = search
 
     try:
         response = requests.get(url, headers=get_headers(), params=params, timeout=10)
@@ -161,6 +168,7 @@ def get_credentials(search_query=None):
                 for cred in creds:
                     msg += f"*{cred['project_name']}* - {cred['service_name']}\n"
                     msg += f"User: `{cred['username']}`\n"
+                    # msg += f"Pass: `{cred['password']}`\n" # Security: Mask or don't show unless explicitly asked? User asked to show.
                     msg += f"Pass: `{cred['password']}`\n"
                     msg += f"Desc: {cred['description']}\n\n"
                 return msg
@@ -174,7 +182,11 @@ def get_credentials(search_query=None):
         logging.error(f"Error fetching credentials: {e}")
         return f"⚠️ Connection Error: {e}"
 
+@skill(name="ERP_SEARCH_INVOICES", description="Search invoices. Params: customer_name or customer_id")
 def search_invoices(customer_name=None, customer_id=None):
+    if not customer_name and not customer_id:
+        return "❓ Please specify a customer name or ID."
+
     base_url = get_base_url()
     if not base_url:
         return "⚠️ ERP URL not configured."
@@ -198,7 +210,10 @@ def search_invoices(customer_name=None, customer_id=None):
                 msg = f"🔎 *Found Invoices ({len(invoices)}):*\n"
                 for inv in invoices:
                     status_icon = "✅" if inv.get('status') == 'Paid' else "⏳"
-                    msg += f"- {status_icon} *{inv['invoice_no']}*: {inv['customer_name']} - {inv['grand_total']} ({inv['status']})\n"
+                    cust = inv.get('customer_name', 'Unknown')
+                    total = inv.get('grand_total', '0.00')
+                    status = inv.get('status', 'Unknown')
+                    msg += f"- {status_icon} *{inv['invoice_no']}*: {cust} - {total} ({status})\n"
                 return msg
             else:
                 return f"⚠️ API Error: {data.get('message', 'Unknown error')}"
