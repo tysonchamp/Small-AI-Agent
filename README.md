@@ -38,6 +38,7 @@ The bot is organized into modular `skills/`:
 - **Python 3.10+**
 - **Ollama** installed and running (`ollama serve`).
 - **Telegram Bot Token** (from @BotFather).
+- **Telegram Chat ID** (from @userinfobot).
 
 ### 2. Clone & Install
 ```bash
@@ -59,7 +60,7 @@ cp config/config.yaml.example config/config.yaml
 nano config/config.yaml
 ```
 **Key Settings:**
-- `telegram.bot_token`: Your Bot Token.
+- `telegram.bot_token`: Your Bot Token. (get from @BotFather)
 - `telegram.chat_id`: Your user ID (get from @userinfobot).
 - `monitoring.websites`: List of sites to watch.
 - `servers`: List of SSH servers to monitor.
