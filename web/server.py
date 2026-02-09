@@ -134,3 +134,13 @@ async def chat_page(request: Request):
 async def chat_api(request: ChatRequest):
     response = await chat_handler.process_message(request.message, chat_id="web-user")
     return {"response": response}
+
+@app.get("/api/logs")
+async def api_logs():
+    try:
+        with open("logs/monitor.log", "r") as f:
+            # Return last 100 lines for realtime view
+            lines = f.readlines()[-100:]
+            return {"logs": "".join(lines)}
+    except:
+        return {"logs": "Log file not found."}

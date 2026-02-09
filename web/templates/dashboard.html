@@ -408,11 +408,39 @@
     </div>
 
     <script>
-        // Auto-scroll logs
         const logBox = document.getElementById('logBox');
+
+        // Initial scroll
         logBox.scrollTop = logBox.scrollHeight;
 
-        // Auto-refresh every 60s
+        // Function to fetch and update logs
+        async function fetchLogs() {
+            try {
+                const response = await fetch('/api/logs');
+                const data = await response.json();
+
+                // Only update if content changed to avoid jitter, 
+                // but for simple logs, replacing is okay. 
+                // Better: Check if length changed or diff.
+                // For now, simple replacement is robust.
+                if (logBox.textContent !== data.logs) {
+                    const isScrolledToBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 10;
+
+                    logBox.textContent = data.logs;
+
+                    if (isScrolledToBottom) {
+                        logBox.scrollTop = logBox.scrollHeight;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+            }
+        }
+
+        // Poll every 2 seconds
+        setInterval(fetchLogs, 2000);
+
+        // Auto-refresh page every 60s (optional now that logs are realtime, but good for status)
         setTimeout(() => window.location.reload(), 60000);
     </script>
 </body>
