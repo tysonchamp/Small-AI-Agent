@@ -81,15 +81,42 @@ async def read_dashboard(request: Request):
         "logs": "".join(logs)
     })
 
-# API Endpoints for potential AJAX updates
-@app.get("/api/health")
-async def api_health():
-    return system_health.check_local_health()
-
-@app.get("/api/logs")
-async def api_logs():
-    try:
-        with open("logs/monitor.log", "r") as f:
-            return {"logs": f.read()[-2000:]}
-    except:
-        return {"logs": ""}
+@app.get("/table/{table_name}", response_class=HTMLResponse)
+async def view_table(request: Request, table_name: str, page: int = 1, limit: int = 20):
+    conn = database.get_connection()
+    c = conn.cursor()
+    
+    # Get all tables for the menu
+    c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = [row[0] for row in c.fetchall() if row[0] != 'sqlite_sequence']
+    
+    # Validate table name to prevent SQL injection
+    if table_name not in tables:
+        return HTMLResponse("Table not found", status_code=404)
+        
+    # Get total count
+    c.execute(f"SELECT COUNT(*) FROM {table_name}")
+    total_count = c.fetchone()[0]
+    total_pages = (total_count + limit - 1) // limit
+    
+    # Get column names
+    c.execute(f"PRAGMA table_info({table_name})")
+    columns = [row[1] for row in c.fetchall()]
+    
+    # Get data with pagination
+    offset = (page - 1) * limit
+    c.execute(f"SELECT * FROM {table_name} LIMIT ? OFFSET ?", (limit, offset))
+    rows = c.fetchall()
+    
+    conn.close()
+    
+    return templates.TemplateResponse("table.html", {
+        "request": request,
+        "table_name": table_name,
+        "tables": tables,
+        "columns": columns,
+        "rows": rows,
+        "page": page,
+        "total_pages": total_pages,
+        "limit": limit
+    })
