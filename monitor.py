@@ -126,7 +126,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
        - interval_seconds: 0 for one-time, >0 for recurring
     
     2. "SCHEDULE_WORKFLOW": User wants to schedule a SYSTEM TASK.
-       - type: "BRIEFING" (morning/daily briefing) or "SYSTEM_HEALTH" (server check)
+{workflows.get_workflow_descriptions()}
        - time: when to start (e.g. "at 8am", "now")
        - interval_seconds: frequency (e.g. "every 24h" = 86400, "every 1h" = 3600). 0 if one-off.
     
@@ -178,7 +178,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Who won the Super Bowl?" -> {{"action": "WEB_SEARCH", "params": {{"query": "Super Bowl winner 2025"}}}}
     "Price of Bitcoin" -> {{"action": "WEB_SEARCH", "params": {{"query": "current price of bitcoin"}}}}
     "Summarize this video: https://youtu.be/xyz" -> {{"action": "SUMMARIZE_CONTENT", "params": {{"url": "https://youtu.be/xyz"}}}}
+    "Summarize this video: https://youtu.be/xyz" -> {{"action": "SUMMARIZE_CONTENT", "params": {{"url": "https://youtu.be/xyz"}}}}
     "Show me pending tasks" -> {{"action": "ERP_TASKS", "params": {{}}}}
+    "Setup a workflow to check pending tasks every hour" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_TASKS", "time": "now", "interval_seconds": 3600}}}}
+    "Schedule invoice check daily at 9am" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_INVOICES", "time": "9am", "interval_seconds": 86400}}}}
     "What are the due invoices?" -> {{"action": "ERP_INVOICES", "params": {{"type": "due"}}}}
     "Give me an invoice summary" -> {{"action": "ERP_INVOICES", "params": {{"type": "summary"}}}}
     "Get credentials for AWS" -> {{"action": "ERP_CREDENTIALS", "params": {{"search": "AWS"}}}}
@@ -201,8 +204,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]))
         
         raw_json = classification_response['message']['content'].strip()
-        raw_json = raw_json.replace("```json", "").replace("```", "").strip()
-        intent = json.loads(raw_json)
+        
+        # Robust JSON extraction
+        try:
+            # Find first { and last }
+            start_idx = raw_json.find('{')
+            end_idx = raw_json.rfind('}')
+            
+            if start_idx != -1 and end_idx != -1:
+                raw_json = raw_json[start_idx:end_idx+1]
+            else:
+                logging.warning(f"No JSON object found in response: {raw_json}")
+                # Fallback: try cleaning markdown code blocks if the simple find failed (unlikely if valid json)
+                raw_json = raw_json.replace("```json", "").replace("```", "").strip()
+                
+            intent = json.loads(raw_json)
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON Parse Error: {e}")
+            logging.error(f"Raw Response: {classification_response['message']['content']}")
+            await update.message.reply_text("⚠️ Brain freeze! I couldn't parse my own thoughts. Please try again.")
+            return
         
         logging.info(f"Intent detected: {intent}")
         

@@ -11,6 +11,21 @@ import database
 # system_health doesn't import workflows, so top level import is fine.
 # But system_health is not created yet! So I will use lazy import inside function.
 
+# --- WORKFLOW REGISTRY ---
+WORKFLOW_TYPES = {
+    "BRIEFING": "Morning/Daily Briefing (Agenda, Notes, System Health)",
+    "SYSTEM_HEALTH": "System Resource Monitoring (CPU, RAM, Disk)",
+    "ERP_TASKS": "Fetch Pending ERP Project Tasks",
+    "ERP_INVOICES": "Fetch Due ERP Invoices"
+}
+
+def get_workflow_descriptions():
+    """Returns a formatted string of available workflows for the System Prompt."""
+    desc = ""
+    for w_type, help_text in WORKFLOW_TYPES.items():
+        desc += f'       - type: "{w_type}" ({help_text})\n'
+    return desc.strip()
+
 async def run_briefing_workflow(context: ContextTypes.DEFAULT_TYPE, params: dict):
     """Compiles and sends a morning briefing."""
     conf = config.load_config()
@@ -56,10 +71,38 @@ async def run_briefing_workflow(context: ContextTypes.DEFAULT_TYPE, params: dict
     await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
 
 
+
 async def run_system_health_workflow(context, params):
     """Aliased to existing logic but triggered via workflow."""
     from skills import system_health
     await system_health.check_server_health_job(context, report_all=True)
+
+async def run_erp_tasks_workflow(context, params):
+    """Fetches pending tasks and sends them."""
+    from skills import erp
+    # Run in executor to avoid blocking async loop
+    import asyncio
+    loop = asyncio.get_running_loop()
+    msg = await loop.run_in_executor(None, erp.get_pending_tasks)
+    
+    # Send message
+    conf = config.load_config()
+    chat_id = conf['telegram'].get('chat_id')
+    if chat_id:
+        await context.bot.send_message(chat_id=chat_id, text=f"📋 *Scheduled Task Report:*\n{msg}", parse_mode='Markdown')
+
+async def run_erp_invoices_workflow(context, params):
+    """Fetches due invoices and sends them."""
+    from skills import erp
+    import asyncio
+    loop = asyncio.get_running_loop()
+    msg = await loop.run_in_executor(None, erp.get_due_invoices)
+    
+    # Send message
+    conf = config.load_config()
+    chat_id = conf['telegram'].get('chat_id')
+    if chat_id:
+        await context.bot.send_message(chat_id=chat_id, text=f"💰 *Scheduled Invoice Report:*\n{msg}", parse_mode='Markdown')
 
 
 async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
@@ -94,6 +137,10 @@ async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
                     await run_briefing_workflow(context, w['params'])
                 elif w['type'] == 'SYSTEM_HEALTH':
                     await run_system_health_workflow(context, w['params'])
+                elif w['type'] == 'ERP_TASKS':
+                    await run_erp_tasks_workflow(context, w['params'])
+                elif w['type'] == 'ERP_INVOICES':
+                    await run_erp_invoices_workflow(context, w['params'])
                 
                 # SCHEDULE NEXT RUN
                 interval = w['interval_seconds']
