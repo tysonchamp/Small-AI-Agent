@@ -11,7 +11,7 @@ import config
 import database
 
 # Import Skills
-from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp
+from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry
 
 import os
 from logging.handlers import RotatingFileHandler
@@ -27,7 +27,8 @@ logging.basicConfig(
     handlers=[
         RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=1), # 5MB, 1 backup
         logging.StreamHandler()
-    ]
+    ],
+    force=True
 )
 
 # --- Main Assistant Logic ---
@@ -157,7 +158,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     12. "SYSTEM_STATUS": User asks about server/system health NOW.
 
     13. "ERP_TASKS": User wants to see pending tasks from the ERP.
+    14. "ERP_INVOICES": User wants to see due invoices or a summary.
+        - type: "due" or "summary"
     
+    15. "ERP_CREDENTIALS": User wants to see project credentials.
+        - search: optional keyword (e.g. "vps", "aws")
+    
+    16. "ERP_SEARCH_INVOICES": User wants to search invoices by customer name OR ID.
+        - customer_name: name to search
+        - customer_id: precise ID
+
+    --- DYNAMIC SKILLS ---
+{registry.get_system_prompt_tools()}
+    ----------------------
     14. "ERP_INVOICES": User wants to see due invoices or a summary.
         - type: "due" or "summary"
     
@@ -188,6 +201,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Show Bennett credential" -> {{"action": "ERP_CREDENTIALS", "params": {{"search": "Bennett"}}}}
     "Search invoices for John" -> {{"action": "ERP_SEARCH_INVOICES", "params": {{"customer_name": "John"}}}}
     "Invoices for customer 123" -> {{"action": "ERP_SEARCH_INVOICES", "params": {{"customer_id": "123"}}}}
+    "Cancel BRIEFING workflows" -> {{"action": "CANCEL_WORKFLOW", "params": {{"workflow_type": "BRIEFING"}}}}
+    "Remove workflow 5" -> {{"action": "CANCEL_WORKFLOW", "params": {{"workflow_id": 5}}}}
+    "Stop checking system health" -> {{"action": "CANCEL_WORKFLOW", "params": {{"workflow_type": "SYSTEM_HEALTH"}}}}
     """
     
     loop = asyncio.get_running_loop()
@@ -253,6 +269,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif action == "LIST_WORKFLOWS":
             response_text = workflows.handle_list_workflows()
             await update.message.reply_text(response_text, parse_mode='Markdown')
+
+        elif action == "CANCEL_WORKFLOW":
+            response_text = workflows.cancel_workflow(
+                workflow_id=params.get("workflow_id"), 
+                workflow_type=params.get("workflow_type")
+            )
+            await update.message.reply_text(response_text)
 
         elif action == "ADD_REMINDER":
             response_text = await reminders.handle_add_reminder(

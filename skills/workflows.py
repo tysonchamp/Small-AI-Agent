@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 
 import config
 import database
+from skills import registry
 
 # Forward declaration or lazy import might be needed for system_health if circular
 # But here we invoke it, so we can import it inside the function or at top if no cycle.
@@ -167,6 +168,36 @@ async def handle_schedule_workflow(w_type, time_str, interval=0):
         resp += f" (Runs every {interval}s)"
     return resp
 
+
+@registry.skill(name="CANCEL_WORKFLOW", description="Cancel/Delete a scheduled workflow. Params: workflow_id (int) OR workflow_type (str).")
+def cancel_workflow(workflow_id=None, workflow_type=None):
+    """Cancels a workflow by ID or Type."""
+    if workflow_id:
+        try:
+            workflow_id = int(workflow_id)
+            database.delete_workflow(workflow_id)
+            return f"✅ Workflow {workflow_id} cancelled."
+        except Exception as e:
+             return f"⚠️ Error cancelling workflow {workflow_id}: {e}"
+    
+    if workflow_type:
+        # Find ID by type
+        workflows = database.get_active_workflows()
+        count = 0
+        deleted_ids = []
+        for w in workflows:
+            if w['type'].upper() == workflow_type.upper():
+                database.delete_workflow(w['id'])
+                deleted_ids.append(w['id'])
+                count += 1
+        
+        if count > 0:
+            return f"✅ Cancelled {count} workflows of type '{workflow_type}' (IDs: {deleted_ids})."
+        else:
+            return f"⚠️ No workflows found of type '{workflow_type}'."
+        
+    return "⚠️ Please provide either workflow_id or workflow_type."
+
 def handle_list_workflows():
     workflows = database.get_active_workflows()
     if not workflows:
@@ -174,5 +205,5 @@ def handle_list_workflows():
     else:
         msg = "*⚙️ Active Workflows:*\n"
         for w in workflows:
-            msg += f"- *{w['type']}*: Next run {w['next_run_time']} (Interval: {w['interval_seconds']}s)\n"
+            msg += f"- *{w['id']}* [{w['type']}]: Next run {w['next_run_time']} (Interval: {w['interval_seconds']}s)\n"
         return msg

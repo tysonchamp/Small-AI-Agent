@@ -1,6 +1,10 @@
 import requests
 import logging
 import config
+import yaml
+import os
+from dateutil import parser
+from skills.registry import skill
 
 def get_base_url():
     conf = config.load_config()
@@ -46,7 +50,8 @@ def get_pending_tasks():
         logging.error(f"Error fetching pending tasks: {e}")
         return f"⚠️ Connection Error: {e}"
 
-def get_due_invoices():
+@skill(name="ERP_INVOICES", description="Fetch due invoices. Params: type='due' (default) or 'summary'")
+def get_due_invoices(type="due"):
     base_url = get_base_url()
     if not base_url:
         return "⚠️ ERP URL not configured."
