@@ -58,7 +58,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/notes - List your notes\n"
         "/reminders - List active reminders\n"
         "/status - Check system health\n"
-        "/status - Check system health\n"
         "/dashboard - Get Web Dashboard link\n"
         "/workflows - List active system workflows",
         parse_mode='Markdown'

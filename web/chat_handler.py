@@ -4,7 +4,7 @@ import ollama
 from datetime import datetime
 import config
 import database
-from skills import notes, reminders, system_health
+from skills import notes, reminders, system_health, workflows
 
 class ChatHandler:
     def __init__(self):
@@ -107,6 +107,30 @@ class ChatHandler:
              return notes.handle_list_notes()
         elif cmd == '/note':
              content = message[6:].strip()
-             notes.handle_add_note(content)
-             return "✅ Note saved."
+             return notes.handle_add_note(content)
+        elif cmd == '/reminders':
+             # Web user doesn't have a chat_id context usually, so we might need a default or passed one
+             # For now, using the passed chat_id (which is 'web-user' by default)
+             # But reminders are stored by chat_id. 
+             # If web user is same as telegram user, they need to set it in config or we use a shared one.
+             # For now, let's just try to list them for the 'web-user' or the config chat_id?
+             # The system is designed for single user mostly.
+             real_chat_id = self.conf['telegram'].get('chat_id')
+             if real_chat_id:
+                 return await reminders.handle_query_schedule(real_chat_id, "all")
+             return "No Telegram Chat ID configured."
+        elif cmd == '/workflows':
+             return workflows.handle_list_workflows()
+        elif cmd == '/help':
+             return (
+                 "🤖 *Web Chat Help*\n\n"
+                 "Commands:\n"
+                 "/status - Check system health\n"
+                 "/notes - List your notes\n"
+                 "/reminders - List active reminders\n"
+                 "/workflows - List active workflows\n"
+                 "/note [content] - Add a note\n\n"
+                 "Or just chat with me naturally!"
+             )
+             
         return "Unknown command. Try asking in natural language."

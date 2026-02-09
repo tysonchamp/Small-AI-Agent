@@ -110,7 +110,7 @@ async def view_table(request: Request, table_name: str, page: int = 1, limit: in
     
     # Get data with pagination
     offset = (page - 1) * limit
-    c.execute(f"SELECT * FROM {table_name} LIMIT ? OFFSET ?", (limit, offset))
+    c.execute(f"SELECT * FROM {table_name} ORDER BY ROWID DESC LIMIT ? OFFSET ?", (limit, offset))
     rows = c.fetchall()
     
     conn.close()
