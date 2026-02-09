@@ -1,15 +1,20 @@
-import asyncio
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 import logging
 import database
 import config
 from skills import system_health, erp
 from datetime import datetime
+from pydantic import BaseModel
+from web.chat_handler import ChatHandler
 
 app = FastAPI()
+chat_handler = ChatHandler()
+
+class ChatRequest(BaseModel):
+    message: str
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="web/static"), name="static")
@@ -120,3 +125,12 @@ async def view_table(request: Request, table_name: str, page: int = 1, limit: in
         "total_pages": total_pages,
         "limit": limit
     })
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
+
+@app.post("/api/chat")
+async def chat_api(request: ChatRequest):
+    response = await chat_handler.process_message(request.message, chat_id="web-user")
+    return {"response": response}
