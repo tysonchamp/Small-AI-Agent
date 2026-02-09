@@ -63,7 +63,13 @@ def get_due_invoices():
                 
                 msg = f"💰 *Due Invoices ({len(invoices)}):*\n"
                 for inv in invoices:
-                    msg += f"- *{inv['invoice_no']}*: {inv['customer_name']} - Due: {inv['due_amount']}\n"
+                    # Based on Postman Collection
+                    inv_no = inv.get('invoice_no', 'N/A')
+                    cust_name = inv.get('customer_name', 'Unknown')
+                    due = inv.get('due_amount', '0.00')
+                    date = inv.get('date', 'N/A')
+                    
+                    msg += f"- *{inv_no}*: {cust_name} - Due: {due} (Date: {date})\n"
                 return msg
             else:
                 return f"⚠️ API Error: {data.get('message', 'Unknown error')}"

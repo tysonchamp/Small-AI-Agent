@@ -1,0 +1,602 @@
+{
+  "info": {
+    "_postman_id": "45cf4cef-bd4b-48bb-a6d5-63c12d99b492",
+    "name": "GBYTE ERP AI Agent API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "10797209"
+  },
+  "item": [
+    {
+      "name": "Fetch Due Invoices",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-KEY",
+            "value": "{{AI_AGENT_API_KEY}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{ERP_URL}}/api/agent/invoices/due",
+          "host": [
+            "{{ERP_URL}}"
+          ],
+          "path": [
+            "api",
+            "agent",
+            "invoices",
+            "due"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Fetch Due Invoices",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-KEY",
+                "value": "{{AI_AGENT_API_KEY}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{ERP_URL}}/api/agent/invoices/due",
+              "host": [
+                "{{ERP_URL}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "invoices",
+                "due"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": "Host",
+              "value": "localhost:8001"
+            },
+            {
+              "key": "Connection",
+              "value": "close"
+            },
+            {
+              "key": "X-Powered-By",
+              "value": "PHP/8.3.6"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, private"
+            },
+            {
+              "key": "Date",
+              "value": "Mon, 09 Feb 2026 09:52:50 GMT"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"success\": true,\n    \"count\": 28,\n    \"data\": [\n        {\n            \"id\": 75,\n            \"invoice_no\": \"GBINV05748\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2026-02-25\",\n            \"grand_total\": 12000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"12000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 73,\n            \"invoice_no\": \"GBINV05746\",\n            \"customer_name\": \"Kumarjit Singha Roy\",\n            \"date\": \"2026-02-15\",\n            \"grand_total\": 3500,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"3500.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 74,\n            \"invoice_no\": \"GBINV05747\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2026-02-11\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"10000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 72,\n            \"invoice_no\": \"GBINV05745\",\n            \"customer_name\": \"Self for Others Income\",\n            \"date\": \"2026-02-10\",\n            \"grand_total\": 59560,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"59560.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 68,\n            \"invoice_no\": \"GBINV05743\",\n            \"customer_name\": \"Self for Others Income\",\n            \"date\": \"2026-01-12\",\n            \"grand_total\": 54000,\n            \"paid_amount\": \"52960.00\",\n            \"due_amount\": \"1040.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 67,\n            \"invoice_no\": \"GBINV05742\",\n            \"customer_name\": \"Jit Chanda\",\n            \"date\": \"2025-12-31\",\n            \"grand_total\": 5500,\n            \"paid_amount\": \"5000.00\",\n            \"due_amount\": \"500.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 66,\n            \"invoice_no\": \"GBINV05741\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-29\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"7844.00\",\n            \"due_amount\": \"2156.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 63,\n            \"invoice_no\": \"GBINV05738\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-19\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"10000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 54,\n            \"invoice_no\": \"GBINV05729\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-12\",\n            \"grand_total\": 45000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"45000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 55,\n            \"invoice_no\": \"GBINV05730\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-12\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"10000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 56,\n            \"invoice_no\": \"GBINV05731\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-12\",\n            \"grand_total\": 18000,\n            \"paid_amount\": \"8000.00\",\n            \"due_amount\": \"10000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 58,\n            \"invoice_no\": \"GBINV05733\",\n            \"customer_name\": \"Dr. Arif Ali\",\n            \"date\": \"2025-12-12\",\n            \"grand_total\": 900,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"900.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 47,\n            \"invoice_no\": \"GBINV05726\",\n            \"customer_name\": \"Anupam Sarkar\",\n            \"date\": \"2025-12-08\",\n            \"grand_total\": 700,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"700.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 48,\n            \"invoice_no\": \"GBINV05727\",\n            \"customer_name\": \"Self for Others Income\",\n            \"date\": \"2025-12-03\",\n            \"grand_total\": 5000,\n            \"paid_amount\": \"3000.00\",\n            \"due_amount\": \"2000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 42,\n            \"invoice_no\": \"GBINV05721\",\n            \"customer_name\": \"Shamim Sarkar\",\n            \"date\": \"2025-11-10\",\n            \"grand_total\": 30000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"30000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 41,\n            \"invoice_no\": \"GBINV05720\",\n            \"customer_name\": \"Dr. Arif Ali\",\n            \"date\": \"2025-11-08\",\n            \"grand_total\": 20000,\n            \"paid_amount\": \"7000.00\",\n            \"due_amount\": \"13000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 39,\n            \"invoice_no\": \"GBINV05718\",\n            \"customer_name\": \"Kumarjit Singha Roy\",\n            \"date\": \"2025-11-07\",\n            \"grand_total\": 2000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"2000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 26,\n            \"invoice_no\": \"GBINV05705\",\n            \"customer_name\": \"Sutanu Banerjee\",\n            \"date\": \"2025-10-13\",\n            \"grand_total\": 9000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"9000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 28,\n            \"invoice_no\": \"GBINV05707\",\n            \"customer_name\": \"Silajit Adak\",\n            \"date\": \"2025-10-13\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"10000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 29,\n            \"invoice_no\": \"GBINV05708\",\n            \"customer_name\": \"Shreya Chatterjee Banerjee\",\n            \"date\": \"2025-10-13\",\n            \"grand_total\": 20000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"20000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 23,\n            \"invoice_no\": \"GBINV05702\",\n            \"customer_name\": \"Kumarjit Singha Roy\",\n            \"date\": \"2025-10-11\",\n            \"grand_total\": 95000,\n            \"paid_amount\": \"30000.00\",\n            \"due_amount\": \"65000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 24,\n            \"invoice_no\": \"GBINV05703\",\n            \"customer_name\": \"Kumarjit Singha Roy\",\n            \"date\": \"2025-10-11\",\n            \"grand_total\": 20000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"20000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 13,\n            \"invoice_no\": \"GBINV05692\",\n            \"customer_name\": \"Shamim Sarkar\",\n            \"date\": \"2025-09-20\",\n            \"grand_total\": 10500,\n            \"paid_amount\": \"6000.00\",\n            \"due_amount\": \"4500.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 31,\n            \"invoice_no\": \"GBINV05710\",\n            \"customer_name\": \"Ayush Mishra\",\n            \"date\": \"2025-09-01\",\n            \"grand_total\": 5500,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"5500.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 17,\n            \"invoice_no\": \"GBINV05696\",\n            \"customer_name\": \"Anupam Sarkar\",\n            \"date\": \"2025-07-20\",\n            \"grand_total\": 500,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"500.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 27,\n            \"invoice_no\": \"GBINV05706\",\n            \"customer_name\": \"Kumarjit Singha Roy\",\n            \"date\": \"2025-06-15\",\n            \"grand_total\": 8000,\n            \"paid_amount\": \"3000.00\",\n            \"due_amount\": \"5000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 15,\n            \"invoice_no\": \"GBINV05694\",\n            \"customer_name\": \"Anupam Sarkar\",\n            \"date\": \"2025-06-10\",\n            \"grand_total\": 25000,\n            \"paid_amount\": \"17000.00\",\n            \"due_amount\": \"8000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 14,\n            \"invoice_no\": \"GBINV05693\",\n            \"customer_name\": \"Anupam Sarkar\",\n            \"date\": \"2024-11-10\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"8000.00\",\n            \"due_amount\": \"2000.00\",\n            \"status\": \"Pending\"\n        }\n    ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Fetch Due Invoices by Customer Name",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-KEY",
+            "value": "{{AI_AGENT_API_KEY}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{ERP_URL}}/api/agent/invoices?customer_name=Subhankar",
+          "host": [
+            "{{ERP_URL}}"
+          ],
+          "path": [
+            "api",
+            "agent",
+            "invoices"
+          ],
+          "query": [
+            {
+              "key": "customer_name",
+              "value": "Subhankar"
+            }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Fetch Due Invoices by Customer Name",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-KEY",
+                "value": "{{AI_AGENT_API_KEY}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{ERP_URL}}/api/agent/invoices?customer_name=Subhankar",
+              "host": [
+                "{{ERP_URL}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "invoices"
+              ],
+              "query": [
+                {
+                  "key": "customer_name",
+                  "value": "Subhankar"
+                }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": "Host",
+              "value": "localhost:8001"
+            },
+            {
+              "key": "Connection",
+              "value": "close"
+            },
+            {
+              "key": "X-Powered-By",
+              "value": "PHP/8.3.6"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, private"
+            },
+            {
+              "key": "Date",
+              "value": "Mon, 09 Feb 2026 09:55:25 GMT"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"success\": true,\n    \"count\": 10,\n    \"data\": [\n        {\n            \"id\": 75,\n            \"invoice_no\": \"GBINV05748\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2026-02-25\",\n            \"grand_total\": 12000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"12000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 74,\n            \"invoice_no\": \"GBINV05747\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2026-02-11\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"10000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 66,\n            \"invoice_no\": \"GBINV05741\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-29\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"7844.00\",\n            \"due_amount\": \"2156.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 63,\n            \"invoice_no\": \"GBINV05738\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-19\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"10000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 64,\n            \"invoice_no\": \"GBINV05739\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-19\",\n            \"grand_total\": 2156,\n            \"paid_amount\": \"2156.00\",\n            \"due_amount\": \"0.00\",\n            \"status\": \"Paid\"\n        },\n        {\n            \"id\": 62,\n            \"invoice_no\": \"GBINV05737\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-18\",\n            \"grand_total\": 1733,\n            \"paid_amount\": \"1733.00\",\n            \"due_amount\": \"0.00\",\n            \"status\": \"Paid\"\n        },\n        {\n            \"id\": 54,\n            \"invoice_no\": \"GBINV05729\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-12\",\n            \"grand_total\": 45000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"45000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 55,\n            \"invoice_no\": \"GBINV05730\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-12\",\n            \"grand_total\": 10000,\n            \"paid_amount\": \"0.00\",\n            \"due_amount\": \"10000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 56,\n            \"invoice_no\": \"GBINV05731\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-12\",\n            \"grand_total\": 18000,\n            \"paid_amount\": \"8000.00\",\n            \"due_amount\": \"10000.00\",\n            \"status\": \"Pending\"\n        },\n        {\n            \"id\": 57,\n            \"invoice_no\": \"GBINV05732\",\n            \"customer_name\": \"Subhankar\",\n            \"date\": \"2025-12-12\",\n            \"grand_total\": 2000,\n            \"paid_amount\": \"2000.00\",\n            \"due_amount\": \"0.00\",\n            \"status\": \"Paid\"\n        }\n    ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Invoice Summery",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-KEY",
+            "value": "{{AI_AGENT_API_KEY}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{ERP_URL}}/api/agent/invoices/summary",
+          "host": [
+            "{{ERP_URL}}"
+          ],
+          "path": [
+            "api",
+            "agent",
+            "invoices",
+            "summary"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Invoice Summery",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-KEY",
+                "value": "{{AI_AGENT_API_KEY}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{ERP_URL}}/api/agent/invoices/summary",
+              "host": [
+                "{{ERP_URL}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "invoices",
+                "summary"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": "Host",
+              "value": "localhost:8001"
+            },
+            {
+              "key": "Connection",
+              "value": "close"
+            },
+            {
+              "key": "X-Powered-By",
+              "value": "PHP/8.3.6"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, private"
+            },
+            {
+              "key": "Date",
+              "value": "Mon, 09 Feb 2026 09:56:14 GMT"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"success\": true,\n    \"summary\": {\n        \"total_pending_amount\": 361856,\n        \"pending_invoices_count\": 28,\n        \"total_invoiced_amount\": \"811655.00\"\n    }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get All Credentials",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-KEY",
+            "value": "{{AI_AGENT_API_KEY}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{ERP_URL}}/api/agent/credentials",
+          "host": [
+            "{{ERP_URL}}"
+          ],
+          "path": [
+            "api",
+            "agent",
+            "credentials"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get All Credentials",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-KEY",
+                "value": "{{AI_AGENT_API_KEY}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{ERP_URL}}/api/agent/credentials",
+              "host": [
+                "{{ERP_URL}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "credentials"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": "Host",
+              "value": "localhost:8001"
+            },
+            {
+              "key": "Connection",
+              "value": "close"
+            },
+            {
+              "key": "X-Powered-By",
+              "value": "PHP/8.3.6"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, private"
+            },
+            {
+              "key": "Date",
+              "value": "Mon, 09 Feb 2026 10:01:15 GMT"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"success\": true,\n    \"count\": 3,\n    \"data\": [\n        {\n            \"id\": 3,\n            \"project_name\": \"Alexandra Golden\",\n            \"service_name\": \"Kenyon Carpenter\",\n            \"username\": \"kewiqoxic\",\n            \"password\": \"Saepe aliquip qui si\",\n            \"description\": \"Aut tempora consequa\"\n        },\n        {\n            \"id\": 2,\n            \"project_name\": \"Glenna Simon\",\n            \"service_name\": \"Fitzgerald Davidson\",\n            \"username\": \"rafew\",\n            \"password\": \"Suscipit exercitatio\",\n            \"description\": \"Commodo veniam inci\"\n        },\n        {\n            \"id\": 1,\n            \"project_name\": \"Eleanor Griffith\",\n            \"service_name\": \"Eric Lane\",\n            \"username\": \"bamol\",\n            \"password\": \"Quo beatae dolor iur\",\n            \"description\": \"Sequi modi ullam ita\"\n        }\n    ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Search Credentials",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-KEY",
+            "value": "{{AI_AGENT_API_KEY}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{ERP_URL}}/api/agent/credentials?search=Griffith",
+          "host": [
+            "{{ERP_URL}}"
+          ],
+          "path": [
+            "api",
+            "agent",
+            "credentials"
+          ],
+          "query": [
+            {
+              "key": "search",
+              "value": "Griffith"
+            }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Search Credentials",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-KEY",
+                "value": "{{AI_AGENT_API_KEY}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{ERP_URL}}/api/agent/credentials?search=Griffith",
+              "host": [
+                "{{ERP_URL}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "credentials"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "Griffith"
+                }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": "Host",
+              "value": "localhost:8001"
+            },
+            {
+              "key": "Connection",
+              "value": "close"
+            },
+            {
+              "key": "X-Powered-By",
+              "value": "PHP/8.3.6"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, private"
+            },
+            {
+              "key": "Date",
+              "value": "Mon, 09 Feb 2026 10:01:03 GMT"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"success\": true,\n    \"count\": 1,\n    \"data\": [\n        {\n            \"id\": 1,\n            \"project_name\": \"Eleanor Griffith\",\n            \"service_name\": \"Eric Lane\",\n            \"username\": \"bamol\",\n            \"password\": \"Quo beatae dolor iur\",\n            \"description\": \"Sequi modi ullam ita\"\n        }\n    ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get All Pending Tasks",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-KEY",
+            "value": "{{AI_AGENT_API_KEY}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{ERP_URL}}/api/agent/tasks/pending",
+          "host": [
+            "{{ERP_URL}}"
+          ],
+          "path": [
+            "api",
+            "agent",
+            "tasks",
+            "pending"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get All Pending Tasks",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-KEY",
+                "value": "{{AI_AGENT_API_KEY}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{ERP_URL}}/api/agent/tasks/pending",
+              "host": [
+                "{{ERP_URL}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "tasks",
+                "pending"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": null,
+          "header": [
+            {
+              "key": "Host",
+              "value": "localhost:8001"
+            },
+            {
+              "key": "Connection",
+              "value": "close"
+            },
+            {
+              "key": "X-Powered-By",
+              "value": "PHP/8.3.6"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, private"
+            },
+            {
+              "key": "Date",
+              "value": "Mon, 09 Feb 2026 10:00:37 GMT"
+            },
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n    \"success\": true,\n    \"count\": 1,\n    \"data\": [\n        {\n            \"id\": 1,\n            \"title\": \"Nihil consequatur c\",\n            \"status\": \"todo\",\n            \"priority\": \"high\",\n            \"due_date\": \"1991-08-13\",\n            \"type\": \"improvement\",\n            \"assignees\": [\n                \"Vijoy Chiti\",\n                \"Nirupam Koley\"\n            ],\n            \"sub_tasks\": [\n                {\n                    \"id\": 1,\n                    \"title\": \"Dolorem aut labore d\",\n                    \"status\": \"todo\",\n                    \"priority\": \"low\"\n                },\n                {\n                    \"id\": 3,\n                    \"title\": \"Tempora excepteur du\",\n                    \"status\": \"todo\",\n                    \"priority\": \"medium\"\n                },\n                {\n                    \"id\": 4,\n                    \"title\": \"Enim voluptas iure q\",\n                    \"status\": \"todo\",\n                    \"priority\": \"low\"\n                }\n            ]\n        }\n    ]\n}"
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "AI_AGENT_API_KEY",
+      "value": ""
+    },
+    {
+      "key": "ERP_URL",
+      "value": ""
+    }
+  ]
+}
