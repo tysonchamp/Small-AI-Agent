@@ -2,9 +2,19 @@ import paramiko
 import psutil
 import logging
 import io
+from telegram import Update
 from telegram.ext import ContextTypes
 
 import config
+
+async def handle_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Check system status from /status command."""
+    conf = config.load_config()
+    msg = get_system_status(conf)
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+import time
+from datetime import timedelta
 
 def check_local_health():
     """Checks the health of the local machine."""
@@ -13,6 +23,11 @@ def check_local_health():
         ram = psutil.virtual_memory()
         disk = psutil.disk_usage('/')
         
+        # Uptime
+        boot_time = psutil.boot_time()
+        uptime_seconds = time.time() - boot_time
+        uptime_str = str(timedelta(seconds=int(uptime_seconds)))
+
         return {
             "name": "Local System",
             "cpu_percent": cpu,
@@ -20,6 +35,7 @@ def check_local_health():
             "ram_total": round(ram.total / (1024**3), 2),
             "ram_percent": ram.percent,
             "disk_percent": disk.percent,
+            "uptime": uptime_str,
             "status": "online"
         }
     except Exception as e:
@@ -50,22 +66,27 @@ def check_ssh_health(server_config):
         # Run commands
         # 1. CPU Usage % (read /proc/stat twice)
         # We run a compound command to get two readings with a 1s delay
-        cmd_cpu = "grep 'cpu ' /proc/stat; sleep 1; grep 'cpu ' /proc/stat"
-        stdin, stdout, stderr = client.exec_command(cmd_cpu)
-        cpu_output = stdout.read().decode().strip().split('\n')
+        cmd = (
+            "grep 'cpu ' /proc/stat; sleep 1; grep 'cpu ' /proc/stat; "
+            "free -m | grep Mem | awk '{print $2, $3}'; "
+            "df -h / | tail -1 | awk '{print $5}'; "
+            "cat /proc/uptime"
+        )
+        stdin, stdout, stderr = client.exec_command(cmd)
+        output = stdout.read().decode().strip().split('\n')
         
-        if len(cpu_output) >= 2:
-            # Parse first reading
-            fields1 = [float(x) for x in cpu_output[0].split()[1:]]
-            total1 = sum(fields1)
-            idle1 = fields1[3] # 4th field is idle
+        # Parse CPU
+        cpu_usage = "?"
+        if len(output) >= 4:
+            # CPU
+            fields1 = [float(x) for x in output[0].split()[1:]]
+            fields2 = [float(x) for x in output[1].split()[1:]]
             
-            # Parse second reading
-            fields2 = [float(x) for x in cpu_output[1].split()[1:]]
+            total1 = sum(fields1)
+            idle1 = fields1[3]
             total2 = sum(fields2)
             idle2 = fields2[3]
             
-            # Calculate delta
             delta_total = total2 - total1
             delta_idle = idle2 - idle1
             
@@ -73,19 +94,22 @@ def check_ssh_health(server_config):
                 cpu_usage = round((1 - (delta_idle / delta_total)) * 100, 1)
             else:
                 cpu_usage = 0.0
+                
+            # RAM
+            ram_data = output[2].split()
+            ram_total = int(ram_data[0])
+            ram_used = int(ram_data[1])
+            ram_percent = round((ram_used / ram_total) * 100, 1)
+            
+            # Disk
+            disk_percent = int(output[3].strip().replace('%', ''))
+            
+            # Uptime
+            uptime_seconds = float(output[4].split()[0])
+            uptime_str = str(timedelta(seconds=int(uptime_seconds)))
+            
         else:
-            cpu_usage = "?"
-
-        # 2. RAM (free -m)
-        stdin, stdout, stderr = client.exec_command("free -m | grep Mem | awk '{print $2, $3}'")
-        ram_data = stdout.read().decode().strip().split()
-        ram_total = int(ram_data[0])
-        ram_used = int(ram_data[1])
-        ram_percent = round((ram_used / ram_total) * 100, 1)
-        
-        # 3. Disk (df -h /)
-        stdin, stdout, stderr = client.exec_command("df -h / | tail -1 | awk '{print $5}'")
-        disk_percent = stdout.read().decode().strip().replace('%', '')
+             raise Exception("Unexpected output format from server")
         
         client.close()
         
@@ -95,7 +119,8 @@ def check_ssh_health(server_config):
             "ram_used": round(ram_used / 1024, 2), # Convert MB to GB? No, free -m is MB. 
             "ram_total": round(ram_total / 1024, 2),
             "ram_percent": ram_percent,
-            "disk_percent": int(disk_percent),
+            "disk_percent": disk_percent,
+            "uptime": uptime_str,
             "status": "online"
         }
         
@@ -119,10 +144,17 @@ def format_health_report(health_data):
         
     report += f"   • RAM: {health_data['ram_percent']}% ({health_data['ram_used']}GB / {health_data['ram_total']}GB)\n"
     report += f"   • Disk: {health_data['disk_percent']}%\n"
+    report += f"   • Uptime: {health_data.get('uptime', 'N/A')}\n"
     
     return report
 
 def get_system_status(config):
+    # Backward compatibility for string report
+    reports = get_all_system_health(config)
+    return "\n".join([format_health_report(r) for r in reports])
+
+def get_all_system_health(config):
+    """Returns a list of health dictionaries for all configured servers."""
     reports = []
     
     # Check configured servers
@@ -132,11 +164,11 @@ def get_system_status(config):
         else:
              reports.append(check_ssh_health(server))
              
-    # If no servers configured, at least check local
-    if not config.get('servers'):
+    # If no servers configured or list empty
+    if not reports and not config.get('servers'):
         reports.append(check_local_health())
         
-    return "\n".join([format_health_report(r) for r in reports])
+    return reports
 
 async def check_server_health_job(context: ContextTypes.DEFAULT_TYPE, report_all=False):
     conf = config.load_config()

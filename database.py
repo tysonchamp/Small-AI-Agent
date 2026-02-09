@@ -15,9 +15,22 @@ def init_db():
     
     # Website Monitoring Table
     c.execute('''CREATE TABLE IF NOT EXISTS websites
-                 (url TEXT PRIMARY KEY, content_hash TEXT, last_checked TIMESTAMP, last_content TEXT)''')
+                 (url TEXT PRIMARY KEY, content_hash TEXT, last_checked TIMESTAMP, last_content TEXT,
+                  last_error TEXT, status_code INTEGER, last_summary TEXT)''')
     try:
         c.execute("ALTER TABLE websites ADD COLUMN last_content TEXT")
+    except sqlite3.OperationalError:
+        pass 
+    try:
+        c.execute("ALTER TABLE websites ADD COLUMN last_error TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        c.execute("ALTER TABLE websites ADD COLUMN status_code INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        c.execute("ALTER TABLE websites ADD COLUMN last_summary TEXT")
     except sqlite3.OperationalError:
         pass 
 

@@ -9,3 +9,8 @@ pyyaml
 dateparser
 youtube-transcript-api
 ddgs
+fastapi 
+uvicorn 
+jinja2 
+python-multipart
+

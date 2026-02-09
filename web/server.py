@@ -1,0 +1,95 @@
+import asyncio
+from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
+import logging
+import database
+import config
+from skills import system_health, erp
+from datetime import datetime
+
+app = FastAPI()
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="web/static"), name="static")
+
+# Templates
+templates = Jinja2Templates(directory="web/templates")
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def read_dashboard(request: Request):
+    conf = config.load_config()
+    
+    # Fetch Data
+    # 1. System Health
+    servers_health = system_health.get_all_system_health(conf)
+    
+    # 2. Websites (from DB)
+    conn = database.get_connection()
+    c = conn.cursor()
+    # Updated query to fetch new columns: last_error, status_code, last_summary
+    # Note: Using `try-except` or checking columns isn't easy in raw SQL without schema info, 
+    # but we just added them. If old DB, it might fail unless migration ran.
+    # The migration logic is in init_db(), so we should be good if app restarted.
+    try:
+        c.execute("SELECT url, last_checked, last_error, status_code, last_summary FROM websites")
+        websites = c.fetchall()
+    except Exception as e:
+        websites = []
+        logging.error(f"Error fetching websites: {e}")
+
+    conn.close()
+    
+    website_status = []
+    for w in websites:
+        # url, last_checked, last_error, status_code, last_summary
+        status = "Active"
+        status_class = "status-ok"
+        
+        if w[2]: # last_error is not None
+            status = f"Error: {w[2]}"
+            status_class = "status-err"
+        elif w[3] and w[3] >= 400: # status_code >= 400
+            status = f"Error (HyperText Transfer Protocol {w[3]})"
+            status_class = "status-err"
+            
+        website_status.append({
+            "url": w[0],
+            "last_checked": w[1],
+            "status": status,
+            "status_class": status_class,
+            "summary": w[4] if w[4] else "No changes detected."
+        })
+
+    # 3. Logs (Read last 50 lines)
+    logs = []
+    try:
+        with open("logs/monitor.log", "r") as f:
+            logs = f.readlines()[-50:]
+    except FileNotFoundError:
+        logs = ["Log file not found."]
+
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "servers": servers_health,
+        "websites": website_status,
+        "logs": "".join(logs)
+    })
+
+# API Endpoints for potential AJAX updates
+@app.get("/api/health")
+async def api_health():
+    return system_health.check_local_health()
+
+@app.get("/api/logs")
+async def api_logs():
+    try:
+        with open("logs/monitor.log", "r") as f:
+            return {"logs": f.read()[-2000:]}
+    except:
+        return {"logs": ""}

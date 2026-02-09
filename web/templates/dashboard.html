@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-secondary: #6b7280;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --border: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Navbar */
+        nav {
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        .brand {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-left: 1.5rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        /* Grid Layout */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Stats */
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            font-size: 0.95rem;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .progress-bar {
+            background-color: var(--border);
+            height: 6px;
+            border-radius: 9999px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--primary);
+            border-radius: 9999px;
+        }
+
+        .progress-fill.high {
+            background-color: var(--warning);
+        }
+
+        .progress-fill.crit {
+            background-color: var(--error);
+        }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            background-color: #f9fafb;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-warning {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-dot {
+            height: 8px;
+            width: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .status-dot.online {
+            background-color: var(--success);
+        }
+
+        .status-dot.offline {
+            background-color: var(--error);
+        }
+
+        /* Logs */
+        .log-terminal {
+            background-color: #111827;
+            color: #10b981;
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            height: 400px;
+            overflow-y: auto;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+        }
+
+        /* Utilities */
+        .text-sm {
+            font-size: 0.875rem;
+        }
+
+        .text-muted {
+            color: var(--text-secondary);
+        }
+
+        .mt-4 {
+            margin-top: 1.5rem;
+        }
+
+        .mb-2 {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Icons (using emoji for simplicity, but simulating icon font spacing) */
+        .icon {
+            font-style: normal;
+        }
+
+        /* Refresh Button */
+        .btn-refresh {
+            background-color: white;
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .btn-refresh:hover {
+            background-color: #f9fafb;
+            border-color: #d1d5db;
+        }
+    </style>
+</head>
+
+<body>
+    <nav>
+        <div class="brand">
+            🤖 AI Admin Center
+        </div>
+        <div class="nav-links">
+            <a href="#">Dashboard</a>
+            <a href="#">Configuration</a>
+            <a href="#">Logs</a>
+            <button onclick="window.location.reload()" class="btn-refresh">🔄 Refresh</button>
+        </div>
+    </nav>
+
+    <div class="container">
+
+        <!-- Server Health Section -->
+        <h2 class="mb-2">server_health_monitoring</h2>
+        <div class="grid">
+            {% for server in servers %}
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🖥️ {{ server.name }}</div>
+                    {% if server.status == 'online' %}
+                    <span class="badge badge-success"><span class="status-dot online"></span>Online</span>
+                    {% else %}
+                    <span class="badge badge-error"><span class="status-dot offline"></span>Offline</span>
+                    {% endif %}
+                </div>
+
+                {% if server.status == 'online' %}
+                <!-- CPU -->
+                <div class="stat-row">
+                    <span class="stat-label">CPU Usage</span>
+                    <span class="stat-value">{{ server.cpu_percent }}%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill {% if server.cpu_percent > 90 %}crit{% elif server.cpu_percent > 75 %}high{% endif %}"
+                        style="width: {{ server.cpu_percent }}%"></div>
+                </div>
+
+                <!-- RAM -->
+                <div class="stat-row mt-4" style="margin-top: 0.75rem;">
+                    <span class="stat-label">Memory</span>
+                    <span class="stat-value">{{ server.ram_percent }}%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill {% if server.ram_percent > 90 %}crit{% elif server.ram_percent > 75 %}high{% endif %}"
+                        style="width: {{ server.ram_percent }}%"></div>
+                </div>
+
+                <div class="mt-4"
+                    style="display: flex; gap: 1rem; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem;">
+                    <div style="flex: 1;">
+                        <div class="text-sm text-muted">Disk</div>
+                        <div class="stat-value">{{ server.disk_percent }}%</div>
+                    </div>
+                    <div style="flex: 1;">
+                        <div class="text-sm text-muted">Uptime</div>
+                        <div class="stat-value" style="font-size: 0.85rem;">{{ server.uptime }}</div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-sm text-muted" style="color: var(--error);">
+                    Connection Error: {{ server.error }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Website Monitoring Section -->
+        <h2 class="mb-2" style="margin-top: 3rem;">website_status_overview</h2>
+        <div class="card" style="padding: 0; overflow: hidden;">
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 30%;">Website</th>
+                            <th style="width: 15%;">Last Checked</th>
+                            <th style="width: 15%;">Status</th>
+                            <th>Latest Intelligence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for site in websites %}
+                        <tr>
+                            <td>
+                                <a href="{{ site.url }}" target="_blank"
+                                    style="color: var(--primary); font-weight: 500; text-decoration: none;">
+                                    {{ site.url.replace('https://', '').replace('http://', '').split('/')[0] }}
+                                </a>
+                                <div class="text-sm text-muted">{{ site.url }}</div>
+                            </td>
+                            <td class="text-sm text-muted">{{ site.last_checked }}</td>
+                            <td>
+                                {% if "Error" in site.status %}
+                                <span class="badge badge-error">
+                                    <span class="status-dot offline"></span> Down
+                                </span>
+                                <div class="text-sm" style="color: var(--error); margin-top: 4px; font-size: 0.75rem;">
+                                    {{ site.status }}
+                                </div>
+                                {% else %}
+                                <span class="badge badge-success">
+                                    <span class="status-dot online"></span> Active
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-sm text-muted">
+                                {% if site.summary %}
+                                {{ site.summary }}
+                                {% else %}
+                                <span style="opacity: 0.5;">No significant changes detected.</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- System Logs -->
+        <h2 class="mb-2" style="margin-top: 3rem;">system_logs</h2>
+        <div class="log-terminal" id="logBox">{{ logs }}</div>
+
+    </div>
+
+    <script>
+        // Auto-scroll logs
+        const logBox = document.getElementById('logBox');
+        logBox.scrollTop = logBox.scrollHeight;
+
+        // Auto-refresh every 60s
+        setTimeout(() => window.location.reload(), 60000);
+    </script>
+</body>
+
+</html>

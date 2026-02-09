@@ -118,22 +118,37 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
     for url in conf['monitoring']['websites']:
         logging.info(f"Checking {url}...")
         
+        # Initialize variables
+        current_content = None
+        status_code = 0
+        error_msg = None
+        
         try:
             # Run blocking request in a separate thread
-            current_content = await loop.run_in_executor(None, get_website_content, url)
+            # Modified get_website_content to return status code as well, or we handle it here
+            import requests
+            headers = {'User-Agent': 'Mozilla/5.0 (compatible; AIWebsiteMonitor/1.0)'}
+            response = await loop.run_in_executor(None, lambda: requests.get(url, headers=headers, timeout=30))
+            status_code = response.status_code
+            response.raise_for_status()
+            current_content = response.text
+            
         except Exception as e:
-            error_msg = f"⚠️ *Error Monitoring Website* \n\nURL: {url}\n\nError: `{str(e)}`"
+            error_msg = str(e)
             logging.error(f"Error checking {url}: {e}")
-            if chat_id:
-                try:
-                    await context.bot.send_message(chat_id=chat_id, text=error_msg, parse_mode='Markdown')
-                except Exception as send_e:
-                    logging.error(f"Failed to send error notification: {send_e}")
+            
+            # Update DB with error
+            c.execute("UPDATE websites SET last_checked=?, last_error=?, status_code=? WHERE url=?",
+                      (time.strftime('%Y-%m-%d %H:%M:%S'), error_msg, status_code, url))
+            conn.commit()
+            
+            # Notify if critical? Maybe just log for now to avoid spam, dashboard will show red.
             continue
         
         if not current_content:
             continue
 
+        # success path
         # Calculate hash on CLEARED text to avoid hidden HTML changes (nonces, etc)
         # run cpu-bound clean_html in executor
         current_cleaned_text = await loop.run_in_executor(None, clean_html, current_content)
@@ -143,20 +158,20 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
         row = c.fetchone()
         
         if row is None:
-            c.execute("INSERT INTO websites (url, content_hash, last_checked, last_content) VALUES (?, ?, ?, ?)",
-                      (url, current_hash, time.strftime('%Y-%m-%d %H:%M:%S'), current_content))
+            c.execute("INSERT INTO websites (url, content_hash, last_checked, last_content, status_code, last_error) VALUES (?, ?, ?, ?, ?, ?)",
+                      (url, current_hash, time.strftime('%Y-%m-%d %H:%M:%S'), current_content, status_code, None))
             conn.commit()
             logging.info(f"Initial check for {url}. Content stored.")
+            
         elif row[0] != current_hash:
             logging.info(f"Change detected for {url}!")
             old_content = row[1]
             
-            # analyze_changes_with_ollama involves network calls to Ollama too (requests to localhost)
-            # ideally this should also be async or threaded, but it's less likely to hang for long than external sites.
-            # strict correctness: threaded.
             analysis = await loop.run_in_executor(None, analyze_changes_with_ollama, old_content, current_content, model)
             
+            summary_text = None
             if analysis:
+                summary_text = analysis
                 msg = f"📢 *Website Change Detected!* \n\nURL: {url}\n\nAI Analysis:\n{analysis}"
                 if chat_id:
                     try:
@@ -166,10 +181,14 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
             else:
                 logging.info(f"No meaningful changes for {url}. Notification suppressed.")
 
-            c.execute("UPDATE websites SET content_hash=?, last_checked=?, last_content=? WHERE url=?",
-                      (current_hash, time.strftime('%Y-%m-%d %H:%M:%S'), current_content, url))
+            c.execute("UPDATE websites SET content_hash=?, last_checked=?, last_content=?, status_code=?, last_error=?, last_summary=? WHERE url=?",
+                      (current_hash, time.strftime('%Y-%m-%d %H:%M:%S'), current_content, status_code, None, summary_text, url))
             conn.commit()
         else:
+            # Update last_checked even if no change, clear error
+            c.execute("UPDATE websites SET last_checked=?, status_code=?, last_error=? WHERE url=?", 
+                      (time.strftime('%Y-%m-%d %H:%M:%S'), status_code, None, url))
+            conn.commit()
             logging.info(f"No changes for {url}.")
             
     conn.close()

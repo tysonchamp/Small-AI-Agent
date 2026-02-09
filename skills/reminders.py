@@ -1,9 +1,17 @@
 import logging
 import dateparser
 from datetime import datetime, timedelta
+from telegram import Update
 from telegram.ext import ContextTypes, ApplicationBuilder
 
 import database
+
+async def handle_reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """List reminders from /reminders command."""
+    # Assuming the user wants to see their schedule
+    chat_id = update.effective_chat.id
+    msg = await handle_query_schedule(chat_id, "all") # Reuse logic
+    await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def check_reminders_job(context: ContextTypes.DEFAULT_TYPE):
     reminders = database.get_pending_reminders() # Returns (id, chat_id, content, interval_seconds)

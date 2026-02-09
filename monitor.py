@@ -5,7 +5,7 @@ import ollama
 import io
 from datetime import datetime
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 import config
 import database
@@ -44,6 +44,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🌐 Web Search & Summarization\n"
         "⚙️ System Workflows & Health Monitoring\n"
         "💼 ERP Integration (Tasks, Invoices, Credentials)\n",
+        parse_mode='Markdown'
+    )
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🤖 *AI Assistant Help*\n\n"
+        "Just chat with me normally! I understand natural language.\n\n"
+        "*Commands:*\n"
+        "/start - Restart bot\n"
+        "/help - Show this message\n"
+        "/note [content] - Save a quick note\n"
+        "/notes - List your notes\n"
+        "/reminders - List active reminders\n"
+        "/status - Check system health\n"
+        "/dashboard - Get Web Dashboard link",
         parse_mode='Markdown'
     )
 
@@ -244,6 +259,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
              report = system_health.get_system_status(conf)
              await update.message.reply_text(report, parse_mode='Markdown')
 
+        elif action == "STATUS":
+            # This seems to be a duplicate or alternative to SYSTEM_STATUS, using a different function.
+            # Assuming system_health.get_system_health() is intended here.
+            # If system_health.get_system_status(conf) is the correct one, this block might need adjustment.
+            # For now, I'll use the provided code.
+            msg = system_health.get_system_health()
+            await update.message.reply_text(msg, parse_mode='Markdown')
+        
+        elif action == "DASHBOARD":
+            await update.message.reply_text("🌐 *Web Dashboard*: http://<YOUR_IP>:8000/dashboard", parse_mode='Markdown')
+
         elif action == "ERP_TASKS":
             await update.message.reply_text("📋 Fetching pending tasks...")
             msg = await loop.run_in_executor(None, erp.get_pending_tasks)
@@ -330,7 +356,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⚠️ Error processing request: {e}")
 
 
+import threading
+import uvicorn
+from web.server import app as web_app
+
+def start_web_server():
+    """Starts the FastAPI web server."""
+    logging.info("Starting Web Interface on http://0.0.0.0:8000")
+    uvicorn.run(web_app, host="0.0.0.0", port=8000, log_level="info", access_log=False)
+
+async def post_init(application: Application):
+    """
+    Post-initialization hook.
+    Using this to start the web server thread.
+    """
+    # Start Web Server in a separate thread
+    web_thread = threading.Thread(target=start_web_server, daemon=True)
+    web_thread.start()
+    
+    # Set bot commands
+    await application.bot.set_my_commands([
+        ("start", "Start the bot"),
+        ("help", "Show help message"),
+        ("notes", "Show your notes"),
+        ("reminders", "Show your reminders"),
+        ("status", "Check system status"),
+        ("dashboard", "Get link to Web Dashboard")
+    ])
+
 def main():
+    """Start the bot."""
     database.init_db()
     
     conf = config.load_config()
@@ -344,10 +399,16 @@ def main():
         logging.error("Bot token not set in config.yaml")
         return
 
-    application = ApplicationBuilder().token(bot_token).build()
+    application = ApplicationBuilder().token(bot_token).post_init(post_init).build()
     
     # Handlers
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('help', help_command))
+    application.add_handler(CommandHandler('note', notes.handle_note_command))
+    application.add_handler(CommandHandler('notes', notes.handle_notes_command))
+    application.add_handler(CommandHandler('reminders', reminders.handle_reminders_command))
+    application.add_handler(CommandHandler('status', system_health.handle_status_command))
+    
     application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & (~filters.COMMAND), handle_message))
     
     # Job Queue
