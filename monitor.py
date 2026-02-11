@@ -124,11 +124,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Analyze the user's message and determine the optimal action.
     Return ONLY a JSON object.
     
-    1. "CHAT": General knowledge, history, cultural facts, or coding help.
+    1. "CHAT": General knowledge, history, cultural facts, or coding help. Use this for greetings ("hi", "hello") and general conversation.
 
     --- RULES ---
     - If the user specifies a target recipient (e.g. "send to tyson", "notify admin"), you MUST use the "NOTIFY_USER" workflow type.
     - If no recipient is specified, use the default report workflows (e.g. ERP_TASKS_REPORT) which send to the bot owner.
+    - ONLY use "WEB_SEARCH" if the user explicitly asks for real-time information, news, or external data not in your knowledge. For general questions, use "CHAT".
     
     --- AVAILABLE SKILLS ---
 {registry.get_system_prompt_tools()}
@@ -264,7 +265,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await context.bot.send_chat_action(chat_id=chat_id, action='typing')
             
-            response = await loop.run_in_executor(None, lambda: client.chat(model=model, messages=messages_payload))
+            response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=messages_payload))
             bot_reply = response['message']['content']
             
             try:

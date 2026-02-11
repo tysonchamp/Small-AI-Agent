@@ -78,7 +78,7 @@ def fetch_smart_content(url):
 
 from skills.registry import skill
 
-@skill(name="WEB_SEARCH", description="Search the web for real-time info. Params: query")
+@skill(name="WEB_SEARCH", description="Find real-time information or specific data points from the internet. Params: query")
 async def web_search(query):
     # loop = asyncio.get_running_loop() # Not needed if we await run_in_executor here or let dispatcher handle it.
     # Actually, we can just use the sync perform_web_search in executor if we want, or make this sync.
