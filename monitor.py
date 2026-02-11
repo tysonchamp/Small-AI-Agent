@@ -11,7 +11,7 @@ import config
 import database
 
 # Import Skills
-from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry
+from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry, notifications
 
 import os
 from logging.handlers import RotatingFileHandler
@@ -125,6 +125,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Return ONLY a JSON object.
     
     1. "CHAT": General knowledge, history, cultural facts, or coding help.
+
+    --- RULES ---
+    - If the user specifies a target recipient (e.g. "send to tyson", "notify admin"), you MUST use the "NOTIFY_USER" workflow type.
+    - If no recipient is specified, use the default report workflows (e.g. ERP_TASKS_REPORT) which send to the bot owner.
     
     --- AVAILABLE SKILLS ---
 {registry.get_system_prompt_tools()}
@@ -138,21 +142,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     Examples:
     "Who won the Super Bowl?" -> {{"action": "WEB_SEARCH", "params": {{"query": "Super Bowl winner 2025"}}}}
-    "Price of Bitcoin" -> {{"action": "WEB_SEARCH", "params": {{"query": "current price of bitcoin"}}}}
-    "Summarize this video: https://youtu.be/xyz" -> {{"action": "SUMMARIZE_CONTENT", "params": {{"url": "https://youtu.be/xyz"}}}}
-    "Summarize this video: https://youtu.be/xyz" -> {{"action": "SUMMARIZE_CONTENT", "params": {{"url": "https://youtu.be/xyz"}}}}
     "Show me pending tasks" -> {{"action": "ERP_TASKS", "params": {{}}}}
-    "Setup a workflow to check pending tasks every hour" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_TASKS", "time": "now", "interval_seconds": 3600}}}}
-    "Schedule invoice check daily at 9am" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_INVOICES", "time": "9am", "interval_seconds": 86400}}}}
-    "What are the due invoices?" -> {{"action": "ERP_INVOICES", "params": {{"type": "due"}}}}
-    "Give me an invoice summary" -> {{"action": "ERP_INVOICES", "params": {{"type": "summary"}}}}
-    "Get credentials for AWS" -> {{"action": "ERP_CREDENTIALS", "params": {{"search": "AWS"}}}}
-    "Show Bennett credential" -> {{"action": "ERP_CREDENTIALS", "params": {{"search": "Bennett"}}}}
-    "Search invoices for John" -> {{"action": "ERP_SEARCH_INVOICES", "params": {{"customer_name": "John"}}}}
-    "Invoices for customer 123" -> {{"action": "ERP_SEARCH_INVOICES", "params": {{"customer_id": "123"}}}}
+    "Setup a workflow to check pending tasks every hour" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_TASKS_REPORT", "time": "now", "interval_seconds": 3600}}}}
+    "Schedule invoice check daily at 9am" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_INVOICES_REPORT", "time": "9am", "interval_seconds": 86400}}}}
+    "Send pending tasks to tyson every morning" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "NOTIFY_USER", "params": "{{\"target_user\": \"tyson\", \"skill_name\": \"ERP_TASKS\"}}", "time": "tomorrow at 9am", "interval_seconds": 86400}}}}
     "Cancel BRIEFING workflows" -> {{"action": "CANCEL_WORKFLOW", "params": {{"workflow_type": "BRIEFING"}}}}
-    "Remove workflow 5" -> {{"action": "CANCEL_WORKFLOW", "params": {{"workflow_id": 5}}}}
-    "Stop checking system health" -> {{"action": "CANCEL_WORKFLOW", "params": {{"workflow_type": "SYSTEM_HEALTH"}}}}
     """
     
     loop = asyncio.get_running_loop()

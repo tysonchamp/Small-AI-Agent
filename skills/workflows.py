@@ -13,11 +13,13 @@ from skills import registry
 # But system_health is not created yet! So I will use lazy import inside function.
 
 # --- WORKFLOW REGISTRY ---
+# --- WORKFLOW REGISTRY ---
 WORKFLOW_TYPES = {
-    "BRIEFING": "Morning/Daily Briefing (Agenda, Notes, System Health)",
-    "SYSTEM_HEALTH": "System Resource Monitoring (CPU, RAM, Disk)",
-    "ERP_TASKS": "Fetch Pending ERP Project Tasks",
-    "ERP_INVOICES": "Fetch Due ERP Invoices"
+    "BRIEFING": "Morning/Daily Briefing (Agenda, Notes, System Health) - Goes to Bot Owner",
+    "SYSTEM_HEALTH": "System Resource Monitoring (CPU, RAM, Disk) - Goes to Bot Owner",
+    "ERP_TASKS_REPORT": "Fetch Pending ERP Project Tasks - Goes to Bot Owner (Default Chat)",
+    "ERP_INVOICES_REPORT": "Fetch Due ERP Invoices - Goes to Bot Owner (Default Chat)",
+    "NOTIFY_USER": "Send skill output to a SPECIFIC user (Params: target_user, skill_name, skill_params)"
 }
 
 def get_workflow_descriptions():
@@ -105,6 +107,20 @@ async def run_erp_invoices_workflow(context, params):
     if chat_id:
         await context.bot.send_message(chat_id=chat_id, text=f"💰 *Scheduled Invoice Report:*\n{msg}", parse_mode='Markdown')
 
+async def run_notify_user_workflow(context, params):
+    """Executes the NOTIFY_USER skill."""
+    from skills import notifications
+    
+    target_user = params.get('target_user')
+    skill_name = params.get('skill_name')
+    skill_params = params.get('skill_params', {})
+    
+    # We ignore the return value here as notify_user sends the message itself?
+    # Actually notify_user implementation returns a string "Status", and sends the msg internally.
+    # So we can just call it.
+    
+    await notifications.notify_user(target_user, skill_name, skill_params)
+
 
 async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
     """Generic job to check and run dynamic workflows."""
@@ -138,10 +154,12 @@ async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
                     await run_briefing_workflow(context, w['params'])
                 elif w['type'] == 'SYSTEM_HEALTH':
                     await run_system_health_workflow(context, w['params'])
-                elif w['type'] == 'ERP_TASKS':
+                elif w['type'] == 'ERP_TASKS' or w['type'] == 'ERP_TASKS_REPORT':
                     await run_erp_tasks_workflow(context, w['params'])
-                elif w['type'] == 'ERP_INVOICES':
+                elif w['type'] == 'ERP_INVOICES' or w['type'] == 'ERP_INVOICES_REPORT':
                     await run_erp_invoices_workflow(context, w['params'])
+                elif w['type'] == 'NOTIFY_USER':
+                    await run_notify_user_workflow(context, w['params'])
                 
                 # SCHEDULE NEXT RUN
                 interval = w['interval_seconds']
@@ -156,8 +174,16 @@ async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"Error in workflow {w.get('id')}: {e}")
 
-@registry.skill(name="SCHEDULE_WORKFLOW", description="Schedule a recurring task. Params: type, time (e.g. 'tomorrow at 9am'), interval_seconds")
-async def schedule_workflow(type: str, time: str, interval_seconds: int = 0):
+from skills.registry import skill
+
+@skill(name="SCHEDULE_WORKFLOW", description='Schedule a recurring task. Params: type, params (JSON string), time (e.g. "tomorrow at 9am"), interval_seconds')
+async def schedule_workflow(type: str, params: str = "{}", time: str = "now", interval_seconds: int = 0):
+    import json
+    try:
+        params_dict = json.loads(params)
+    except json.JSONDecodeError:
+        return "⚠️ Error: params must be a valid JSON string."
+
     dt = dateparser.parse(time, settings={'PREFER_DATES_FROM': 'future'})
     if not dt:
         # Try to parse relative time "in 5 minutes", "every hour"
@@ -165,14 +191,14 @@ async def schedule_workflow(type: str, time: str, interval_seconds: int = 0):
         # User might say "every hour", let's assume 'now' start.
         dt = datetime.now() 
 
-    database.add_workflow(type, {}, interval_seconds, dt)
+    database.add_workflow(type, params_dict, interval_seconds, dt)
     
     resp = f"✅ Scheduled *{type}* starting at {dt.strftime('%Y-%m-%d %H:%M:%S')}"
     if interval_seconds > 0:
         resp += f" (Runs every {interval_seconds}s)"
     return resp
 
-@registry.skill(name="LIST_WORKFLOWS", description="List active scheduled workflows.")
+@skill(name="LIST_WORKFLOWS", description="List active scheduled workflows.")
 def list_workflows():
     workflows = database.get_active_workflows()
     if not workflows:
@@ -181,10 +207,12 @@ def list_workflows():
         msg = "*⚙️ Active Workflows:*\n"
         for w in workflows:
             msg += f"- *{w['id']}* [{w['type']}]: Next run {w['next_run_time']} (Interval: {w['interval_seconds']}s)\n"
+            if w['params']:
+                msg += f"  Params: {w['params']}\n"
         return msg
 
 
-@registry.skill(name="CANCEL_WORKFLOW", description="Cancel/Delete a scheduled workflow. Params: workflow_id (int) OR workflow_type (str).")
+@skill(name="CANCEL_WORKFLOW", description="Cancel/Delete a scheduled workflow. Params: workflow_id (int) OR workflow_type (str).")
 def cancel_workflow(workflow_id=None, workflow_type=None):
     """Cancels a workflow by ID or Type."""
     if workflow_id:
@@ -196,6 +224,16 @@ def cancel_workflow(workflow_id=None, workflow_type=None):
              return f"⚠️ Error cancelling workflow {workflow_id}: {e}"
     
     if workflow_type:
+        # Check for ALL
+        if workflow_type.upper() == 'ALL':
+            workflows = database.get_active_workflows()
+            if not workflows:
+                return "⚠️ No active workflows to cancel."
+            
+            for w in workflows:
+                database.delete_workflow(w['id'])
+            return f"✅ Cancelled ALL {len(workflows)} active workflows."
+
         # Find ID by type
         workflows = database.get_active_workflows()
         count = 0
