@@ -118,5 +118,14 @@ The `description` in the `@skill` decorator is injected directly into the LLM sy
 
 ## 7. Troubleshooting
 - **Logs:** Check `logs/monitor.log` for runtime errors.
-- **Service Status:** `sudo systemctl status ai-assistant`
-- **Restarting:** `sudo systemctl restart ai-assistant`
+- **Service Status:** `systemctl status ai-assistant`
+
+### ⚠️ Development Workflow (CRITICAL: MANUAL ACTIONS ONLY)
+**The AI Assistant MUST NOT run `systemctl` commands (start/stop/restart).** These are manual user actions.
+
+**Recommended Steps for YOU (The User):**
+1.  **Stop Service:** `systemctl stop ai-assistant`
+2.  **Run Manually during Dev:** `python3 monitor.py`
+3.  **Debug/Code:** AI makes changes.
+4.  **Kill Manual Process:** `kill -9 <PID>`
+5.  **Restart Service:** `sudo systemctl start ai-assistant` (User Action Only)
