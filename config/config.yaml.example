@@ -1,12 +1,20 @@
 telegram:
   bot_token: "YOUR_BOT_TOKEN_HERE"
   chat_id: "YOUR_CHAT_ID_HERE"
+  timezone: "Asia/Kolkata"
+  users:
+    admin: "" # chat id here
+    tyson: "" # chat id here for other users or team members
 
 monitoring:
   check_interval_seconds: 300
   websites:
     - "https://tysonchamp.com"
     # Add more websites here
+
+agent:
+  name: "Jack"
+  persona: "You are a helpful and efficient AI assistant. you are strictly professional and to the point."
 
 ollama:
   model: "gemma3:latest"

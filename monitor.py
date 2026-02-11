@@ -62,8 +62,11 @@ def authorized_only(func):
 
 @authorized_only
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    conf = config.load_config()
+    agent_name = conf.get('agent', {}).get('name', 'AI Assistant')
+    
     await update.message.reply_text(
-        "👋 *AI Developer Assistant Online*\n\n"
+        f"👋 *{agent_name} Online*\n\n"
         "**Features:**\n"
         "🔍 Website Monitoring (Background)\n"
         "🧠 Persistent Memory (I remember our chat)\n"
@@ -139,6 +142,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     conf = config.load_config()
     model = conf['ollama'].get('model', 'gemma3:latest')
+    
+    agent_name = conf.get('agent', {}).get('name', 'AI Assistant')
+    persona = conf.get('agent', {}).get('persona', 'You are a helpful assistant.')
 
     # --- Intelligent Intent Classification ---
     import json
@@ -149,13 +155,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_time = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S %Z')
     
     system_prompt = f"""
-    You are an intelligent assistant. 
+    You are {agent_name}. {persona}
     Current Time: {current_time}
     
     Analyze the user's message and determine the optimal action.
     Return ONLY a JSON object.
     
     1. "CHAT": General knowledge, history, cultural facts, or coding help. Use this for greetings ("hi", "hello") and general conversation.
+    2. "CLEAR_MEMORY": Use this when the user explicitly asks to "clear memory", "forget everything", or "reset chat".
 
     --- RULES ---
     - If the user specifies a target recipient (e.g. "send to tyson", "notify admin"), you MUST use the "NOTIFY_USER" workflow type.
@@ -179,6 +186,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Schedule invoice check daily at 9am" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_INVOICES_REPORT", "time": "9am", "interval_seconds": 86400}}}}
     "Send pending tasks to tyson every morning" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "NOTIFY_USER", "params": "{{\"target_user\": \"tyson\", \"skill_name\": \"ERP_TASKS\"}}", "time": "tomorrow at 9am", "interval_seconds": 86400}}}}
     "Cancel BRIEFING workflows" -> {{"action": "CANCEL_WORKFLOW", "params": {{"workflow_type": "BRIEFING"}}}}
+    "Forget everything" -> {{"action": "CLEAR_MEMORY", "params": {{}}}}
     """
     
     loop = asyncio.get_running_loop()
@@ -283,7 +291,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             messages_payload = []
             messages_payload.append({
                 'role': 'system', 
-                'content': f"You are a helpful assistant. Current time: {current_time}"
+                'content': f"You are {agent_name}. {persona}\nCurrent time: {current_time}"
             })
             for role, content in history:
                 messages_payload.append({'role': role, 'content': content})
