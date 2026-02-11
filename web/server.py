@@ -87,34 +87,33 @@ async def read_dashboard(request: Request):
     })
 
 @app.get("/table/{table_name}", response_class=HTMLResponse)
-async def view_table(request: Request, table_name: str, page: int = 1, limit: int = 20):
+async def view_table(request: Request, table_name: str, page: int = 1, limit: int = 20, 
+                     q: str = None, sort: str = None, order: str = 'DESC'):
+    
+    # Extract column filters (params starting with f_)
+    filters = {}
+    for key, value in request.query_params.items():
+        if key.startswith('f_') and value:
+            col_name = key[2:] # Remove f_ prefix
+            filters[col_name] = value
+
     conn = database.get_connection()
     c = conn.cursor()
-    
-    # Get all tables for the menu
     c.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = [row[0] for row in c.fetchall() if row[0] != 'sqlite_sequence']
-    
-    # Validate table name to prevent SQL injection
+    conn.close()
+
     if table_name not in tables:
         return HTMLResponse("Table not found", status_code=404)
-        
-    # Get total count
-    c.execute(f"SELECT COUNT(*) FROM {table_name}")
-    total_count = c.fetchone()[0]
-    total_pages = (total_count + limit - 1) // limit
-    
-    # Get column names
-    c.execute(f"PRAGMA table_info({table_name})")
-    columns = [row[1] for row in c.fetchall()]
-    
-    # Get data with pagination
-    offset = (page - 1) * limit
-    c.execute(f"SELECT * FROM {table_name} ORDER BY ROWID DESC LIMIT ? OFFSET ?", (limit, offset))
-    rows = c.fetchall()
-    
-    conn.close()
-    
+
+    try:
+        rows, total_count, columns = database.get_table_data(
+            table_name, page, limit, sort_by=sort, sort_order=order, search=q, filters=filters
+        )
+        total_pages = (total_count + limit - 1) // limit
+    except Exception as e:
+         return HTMLResponse(f"Error loading table: {e}", status_code=500)
+
     return templates.TemplateResponse("table.html", {
         "request": request,
         "table_name": table_name,
@@ -123,7 +122,11 @@ async def view_table(request: Request, table_name: str, page: int = 1, limit: in
         "rows": rows,
         "page": page,
         "total_pages": total_pages,
-        "limit": limit
+        "limit": limit,
+        "q": q,
+        "sort": sort,
+        "order": order,
+        "filters": filters
     })
 
 @app.get("/chat", response_class=HTMLResponse)

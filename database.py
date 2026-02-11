@@ -240,3 +240,103 @@ def delete_workflow(w_id):
     c.execute("DELETE FROM workflows WHERE id=?", (w_id,))
     conn.commit()
     conn.close()
+# --- Generic Table Functions (Advanced Viewer) ---
+def get_table_schema(table_name):
+    """Returns list of column names for a table."""
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        # Validate existence first to be safe, though PRAGMA is generally safe with param
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        if not c.fetchone():
+            return []
+        
+        c.execute(f"PRAGMA table_info({table_name})")
+        return [row[1] for row in c.fetchall()]
+    except Exception as e:
+        logging.error(f"Error getting schema for {table_name}: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_table_data(table_name, page=1, limit=20, sort_by=None, sort_order='DESC', search=None, filters=None):
+    """
+    Retrieves table data with search, filter, sort and pagination.
+    Returns: (rows, total_count, columns)
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    
+    try:
+        # 1. Validate table exists
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        if not c.fetchone():
+            raise ValueError(f"Table {table_name} does not exist")
+
+        # 2. Get columns
+        c.execute(f"PRAGMA table_info({table_name})")
+        columns = [row[1] for row in c.fetchall()]
+        
+        # 3. Build Query
+        query = f"SELECT * FROM {table_name}"
+        count_query = f"SELECT COUNT(*) FROM {table_name}"
+        conditions = []
+        params = []
+
+        # Global Search
+        if search:
+            search_conditions = []
+            for col in columns:
+                search_conditions.append(f"{col} LIKE ?")
+                params.append(f"%{search}%")
+            if search_conditions:
+                conditions.append(f"({' OR '.join(search_conditions)})")
+
+        # Column Filters
+        if filters:
+            for col, val in filters.items():
+                if col in columns and val:
+                    conditions.append(f"{col} LIKE ?")
+                    params.append(f"%{val}%")
+
+        if conditions:
+            where_clause = " WHERE " + " AND ".join(conditions)
+            query += where_clause
+            count_query += where_clause
+        
+        # Sort
+        if sort_by and sort_by in columns:
+            order = 'ASC' if sort_order.upper() == 'ASC' else 'DESC'
+            query += f" ORDER BY {sort_by} {order}"
+        else:
+            # Default sort
+            if 'id' in columns:
+                query += " ORDER BY id DESC"
+            elif 'timestamp' in columns: # Common in our tables
+                query += " ORDER BY timestamp DESC"
+            else:
+                query += " ORDER BY ROWID DESC"
+
+        # Pagination
+        offset = (page - 1) * limit
+        query += " LIMIT ? OFFSET ?"
+        
+        # Execute Count (using params ONLY for WHERE clause)
+        c.execute(count_query, params)
+        total_count = c.fetchone()[0]
+
+        # Execute Data (params + limit + offset)
+        data_params = list(params)
+        data_params.append(limit)
+        data_params.append(offset)
+        
+        c.execute(query, data_params)
+        rows = c.fetchall()
+        
+        return rows, total_count, columns
+
+    except Exception as e:
+        logging.error(f"Error fetching table data for {table_name}: {e}")
+        raise e
+    finally:
+        conn.close()

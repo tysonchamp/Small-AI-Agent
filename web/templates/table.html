@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database: {{ table_name }} - AI Assistant</title>
+    <title>Database: {{ table_name }} - AI Assistant</title> 
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -220,29 +221,74 @@
         </div>
 
         <div class="card">
+            <!-- Search & Filter Controls -->
+            <div
+                style="padding: 1rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; align-items: center;">
+                <form method="GET" style="display: flex; gap: 0.5rem; flex: 1;">
+                    <!-- Preserve existing filters/sort if any handled via hidden inputs? No, form submission resets unless we include them. 
+                         For simplicity, global search resets other specialized filters usually, OR we keep them. 
+                         Let's keep it simple: Search is global. Filters are separately updated via individual inputs or enter key.
+                         Actually, standard pattern: A single form wrapping the table or separate form.
+                         Easy way: Global Search form. Column filters form (on enter).
+                         Let's just make the Search bar simply submit 'q'. -->
+                    <input type="text" name="q" value="{{ q or '' }}" placeholder="Search all columns..."
+                        style="background: #111827; border: 1px solid var(--border); color: white; padding: 0.5rem; border-radius: 0.375rem; flex: 1;">
+                    <button type="submit" class="btn">Search</button>
+                    {% if q or filters %}
+                    <a href="?" class="btn" style="background: #ef4444; border-color: #ef4444;">Clear</a>
+                    {% endif %}
+                </form>
+            </div>
+
             <div class="table-container">
                 {% if rows %}
-                <table>
-                    <thead>
-                        <tr>
-                            {% for col in columns %}
-                            <th>{{ col }}</th>
+                <form method="GET" id="filterForm">
+                    <!-- Preserve Global Search & Sort -->
+                    {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+                    {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+                    {% if order %}<input type="hidden" name="order" value="{{ order }}">{% endif %}
+
+                    <table>
+                        <thead>
+                            <tr>
+                                {% for col in columns %}
+                                <th>
+                                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                        <!-- Sortable Header -->
+                                        <a href="?sort={{ col }}&order={% if sort == col and order == 'ASC' %}DESC{% else %}ASC{% endif %}&q={{ q or '' }}{% for k, v in filters.items() %}&f_{{ k }}={{ v }}{% endfor %}"
+                                            style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.25rem;">
+                                            {{ col }}
+                                            {% if sort == col %}
+                                            <span>{% if order == 'ASC' %}▲{% else %}▼{% endif %}</span>
+                                            {% else %}
+                                            <span style="opacity: 0.3;">⇅</span>
+                                            {% endif %}
+                                        </a>
+                                        <!-- Column Filter -->
+                                        <input type="text" name="f_{{ col }}" value="{{ filters.get(col, '') }}"
+                                            placeholder="Filter..."
+                                            style="background: #374151; border: 1px solid var(--border); color: #d1d5db; padding: 0.25rem; border-radius: 0.25rem; font-size: 0.75rem; width: 100%; box-sizing: border-box;"
+                                            onkeydown="if(event.key === 'Enter') document.getElementById('filterForm').submit()">
+                                    </div>
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr>
+                                {% for cell in row %}
+                                <td title="{{ cell }}">{{ cell }}</td>
+                                {% endfor %}
+                            </tr>
                             {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in rows %}
-                        <tr>
-                            {% for cell in row %}
-                            <td title="{{ cell }}">{{ cell }}</td>
-                            {% endfor %}
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                    <button type="submit" style="display: none;"></button> <!-- Allow implicit submit on enter -->
+                </form>
                 {% else %}
                 <div style="padding: 3rem; text-align: center; color: var(--text-secondary);">
-                    No data found in this table.
+                    No data found matching your criteria.
                 </div>
                 {% endif %}
             </div>
@@ -253,9 +299,15 @@
                     Page {{ page }} of {{ total_pages }}
                 </div>
                 <div class="page-controls">
-                    <a href="?page={{ page - 1 }}&limit={{ limit }}"
+                    <!-- Helper macro/logic to build query string for pagination -->
+                    {% set base_query = 'q=' ~ (q or '') ~ '&sort=' ~ (sort or '') ~ '&order=' ~ (order or '') %}
+                    {% for k, v in filters.items() %}
+                    {% set base_query = base_query ~ '&f_' ~ k ~ '=' ~ v %}
+                    {% endfor %}
+
+                    <a href="?page={{ page - 1 }}&limit={{ limit }}&{{ base_query }}"
                         class="btn {% if page <= 1 %}disabled{% endif %}">Previous</a>
-                    <a href="?page={{ page + 1 }}&limit={{ limit }}"
+                    <a href="?page={{ page + 1 }}&limit={{ limit }}&{{ base_query }}"
                         class="btn {% if page >= total_pages %}disabled{% endif %}">Next</a>
                 </div>
             </div>
