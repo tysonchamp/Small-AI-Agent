@@ -1,6 +1,6 @@
 import logging
 import json
-import ollama
+import ai_client
 from datetime import datetime
 import config
 import database
@@ -10,6 +10,7 @@ class ChatHandler:
     def __init__(self):
         self.conf = config.load_config()
         self.model = self.conf['ollama'].get('model', 'gemma3:latest')
+        self.client = ai_client.get_client()
 
     async def process_message(self, user_message, chat_id="web-user"):
         """
@@ -49,7 +50,7 @@ class ChatHandler:
         """
 
         try:
-            response = ollama.chat(model=self.model, messages=[
+            response = self.client.chat(model=self.model, messages=[
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_message}
             ])
@@ -91,7 +92,7 @@ class ChatHandler:
             
         elif action == 'CHAT':
             # Perform actual chat response
-            chat_response = ollama.chat(model=self.model, messages=[
+            chat_response = self.client.chat(model=self.model, messages=[
                 {'role': 'system', 'content': "You are a helpful AI assistant. Answer concisely."},
                 {'role': 'user', 'content': original_message}
             ])

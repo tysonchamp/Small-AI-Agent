@@ -90,7 +90,7 @@ async def run_erp_tasks_workflow(context, params):
     conf = config.load_config()
     chat_id = conf['telegram'].get('chat_id')
     if chat_id:
-        await context.bot.send_message(chat_id=chat_id, text=f"📋 *Scheduled Task Report:*\n{msg}", parse_mode='Markdown')
+        await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
 
 async def run_erp_invoices_workflow(context, params):
     """Fetches due invoices and sends them."""

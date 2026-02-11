@@ -9,7 +9,9 @@ monitoring:
     # Add more websites here
 
 ollama:
-  model: "gemma3:latest" # Change this if you have a different model (e.g. mistral, llama2, etc.)
+  model: "gemma3:latest"
+  host: "http://localhost:11434"
+  api_key: "" # Change this if you have a different model (e.g. mistral, llama2, etc.)
   # Run 'ollama list' in your terminal to see available models.
 
 servers:

@@ -122,6 +122,7 @@ The `description` in the `@skill` decorator is injected directly into the LLM sy
 
 ### ⚠️ Development Workflow (CRITICAL: MANUAL ACTIONS ONLY)
 **The AI Assistant MUST NOT run `systemctl` commands (start/stop/restart).** These are manual user actions.
+**The AI Assistant MUST NOT store any sensitive data in the code. Always use environment variables & config.yaml file.**
 
 **Recommended Steps for YOU (The User):**
 1.  **Stop Service:** `systemctl stop ai-assistant`

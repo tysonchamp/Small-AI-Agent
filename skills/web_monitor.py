@@ -1,7 +1,7 @@
 import time
 import logging
 import asyncio
-import ollama
+import ai_client
 from telegram.ext import ContextTypes
 
 import config
@@ -62,7 +62,8 @@ def analyze_changes_with_ollama(old_content, new_content, model):
     """
 
     try:
-        response = ollama.chat(model=model, messages=[
+        client = ai_client.get_client()
+        response = client.chat(model=model, messages=[
             {'role': 'user', 'content': prompt},
         ])
         content = response['message']['content'].strip()

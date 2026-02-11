@@ -34,12 +34,31 @@ def get_pending_tasks():
                 if not tasks:
                     return "✅ No pending tasks found."
                 
-                msg = f"📋 *Pending Tasks ({len(tasks)}):*\n"
-                for task in tasks:
-                    msg += f"- *{task['title']}* (Priority: {task['priority']})\n"
-                    if task.get('sub_tasks'):
-                        for sub in task['sub_tasks']:
-                            msg += f"  - {sub['title']} ({sub['status']})\n"
+                msg = "📋 *Scheduled Task Report*\n\n"
+                
+                # Group by Priority (Optional, but user asked for grouping 'sub group', 
+                # but the example showed Project -> Subtasks. Let's stick to the Project list structure.)
+                # actually the user said "group the task with sub group" and "bullet point 1, 2, 3"
+                
+                for index, task in enumerate(tasks, 1):
+                    # Title line with numbering
+                    priority = task.get('priority', 'Normal').capitalize()
+                    msg += f"*{index}. {task['title']}* (Priority: {priority})\n"
+                    
+                    sub_tasks = task.get('sub_tasks', [])
+                    if sub_tasks:
+                        for sub in sub_tasks:
+                            # Status check/mark
+                            status = sub.get('status', 'todo')
+                            # You can use [ ] or [x] or just bullets. 
+                            # User example: * [ ] Logo Design
+                            # Let's use simplified bullets for Telegram readability
+                            msg += f"  • {sub['title']}\n"
+                    else:
+                         msg += f"  _(No pending sub-tasks)_\n"
+                    
+                    msg += "\n" # Blank line between projects
+                
                 return msg
             else:
                 return f"⚠️ API Error: {data.get('message', 'Unknown error')}"

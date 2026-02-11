@@ -270,7 +270,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await context.bot.send_chat_action(chat_id=chat_id, action='typing')
             
-            response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=messages_payload))
+            response = await loop.run_in_executor(None, lambda: client.chat(model=model, messages=messages_payload))
             bot_reply = response['message']['content']
             
             try:

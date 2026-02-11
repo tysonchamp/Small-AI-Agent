@@ -2,7 +2,6 @@ import logging
 import asyncio
 import io
 import re
-import ollama
 from telegram.ext import ContextTypes
 
 import config
@@ -85,6 +84,7 @@ async def web_search(query):
     # Actually, we can just use the sync perform_web_search in executor if we want, or make this sync.
     # But perform_web_search is sync blocking.
     import asyncio
+    import ai_client # Lazy import to avoid circular dependency if any (though unlikely here)
     loop = asyncio.get_running_loop()
     
     conf = config.load_config()
@@ -107,7 +107,8 @@ async def web_search(query):
     Provide a concise and accurate answer with citations (URLs) where appropriate.
     """
     
-    ai_response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=[
+    client = ai_client.get_client()
+    ai_response = await loop.run_in_executor(None, lambda: client.chat(model=model, messages=[
         {'role': 'user', 'content': synth_prompt}
     ]))
     
@@ -116,6 +117,7 @@ async def web_search(query):
 @skill(name="SUMMARIZE_CONTENT", description="Summarize a URL (video/page). Params: url, instruction (optional)")
 async def summarize_content(url, instruction="Summarize this content effectively."):
     import asyncio
+    import ai_client
     loop = asyncio.get_running_loop()
     
     conf = config.load_config()
@@ -141,7 +143,8 @@ async def summarize_content(url, instruction="Summarize this content effectively
          {content_text[:20000]} 
          """
          
-         summary_response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=[
+         client = ai_client.get_client()
+         summary_response = await loop.run_in_executor(None, lambda: client.chat(model=model, messages=[
              {'role': 'user', 'content': summary_prompt}
          ]))
          
