@@ -32,8 +32,35 @@ logging.basicConfig(
 )
 logging.getLogger("telegram").setLevel(logging.DEBUG)
 
+# --- Authorization Decorator ---
+from functools import wraps
+
+def authorized_only(func):
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        conf = config.load_config()
+        # Ensure IDs are compared as strings to avoid type mismatches
+        admin_id = str(conf['telegram'].get('chat_id', '')).strip()
+        user_id = str(update.effective_chat.id).strip()
+        
+        if not admin_id:
+            logging.error("Admin Chat ID not configured! allowing all for safety? No, blocking all.")
+            await update.message.reply_text("⛔ Configuration Error: Admin ID not set.")
+            return
+
+        if admin_id != user_id:
+            logging.warning(f"⛔ Unauthorized access attempt from {user_id} ({update.effective_user.first_name})")
+            # Optional: Notify admin that someone tried to access? 
+            # await context.bot.send_message(chat_id=admin_id, text=f"⚠️ Unauthorized access attempt from {user_id}")
+            await update.message.reply_text("⛔ Unauthorized access. This is a private bot.")
+            return
+        
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
 # --- Main Assistant Logic ---
 
+@authorized_only
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 *AI Developer Assistant Online*\n\n"
@@ -49,6 +76,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+@authorized_only
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 *AI Assistant Help*\n\n"
@@ -65,6 +93,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+@authorized_only
 async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🌐 *Web Dashboard*: http://<YOUR_IP>:8000/dashboard\n"
@@ -72,10 +101,12 @@ async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
+@authorized_only
 async def workflows_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = workflows.handle_list_workflows()
     await update.message.reply_text(msg, parse_mode='Markdown')
 
+@authorized_only
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Debug log for ANY update
     logging.info(f"Update received: {update}")
@@ -326,13 +357,13 @@ def main():
 
     application = ApplicationBuilder().token(bot_token).post_init(post_init).build()
     
-    # Handlers
+    # Handlers - WRAPPED WITH AUTH DECORATOR
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('help', help_command))
-    application.add_handler(CommandHandler('note', notes.handle_note_command))
-    application.add_handler(CommandHandler('notes', notes.handle_notes_command))
-    application.add_handler(CommandHandler('reminders', reminders.handle_reminders_command))
-    application.add_handler(CommandHandler('status', system_health.handle_status_command))
+    application.add_handler(CommandHandler('note', authorized_only(notes.handle_note_command)))
+    application.add_handler(CommandHandler('notes', authorized_only(notes.handle_notes_command)))
+    application.add_handler(CommandHandler('reminders', authorized_only(reminders.handle_reminders_command)))
+    application.add_handler(CommandHandler('status', authorized_only(system_health.handle_status_command)))
     application.add_handler(CommandHandler('dashboard', dashboard_command))
     application.add_handler(CommandHandler('workflows', workflows_command))
     
