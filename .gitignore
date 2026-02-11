@@ -3,3 +3,7 @@
 __pycache__/
 .env
 config.yaml
+logs/
+logs/*
+debug/
+debug/*

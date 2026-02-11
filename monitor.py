@@ -30,6 +30,7 @@ logging.basicConfig(
     ],
     force=True
 )
+logging.getLogger("telegram").setLevel(logging.DEBUG)
 
 # --- Main Assistant Logic ---
 
@@ -110,8 +111,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- Intelligent Intent Classification ---
     import json
+    import pytz
     
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    tz_str = conf['telegram'].get('timezone', 'UTC')
+    tz = pytz.timezone(tz_str)
+    current_time = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S %Z')
     
     system_prompt = f"""
     You are an intelligent assistant. 
