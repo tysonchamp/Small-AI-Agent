@@ -99,8 +99,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @authorized_only
 async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🌐 *Web Dashboard*: http://<YOUR_IP>:8000/dashboard\n"
-        "💬 *Chat Interface*: http://<YOUR_IP>:8000/chat",
+        "🌐 *Web Dashboard*: http://localhost:8000/\n"
+        "💬 *Chat Interface*: http://localhost:8000/chat\n"
+        "*Note*: If you are accessing this from a different device, use your computer's IP address instead of localhost.",
         parse_mode='Markdown'
     )
 
