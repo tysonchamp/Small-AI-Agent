@@ -11,7 +11,7 @@ import config
 import database
 
 # Import Skills
-from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry, notifications
+from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry, notifications, system_ops
 
 import os
 from logging.handlers import RotatingFileHandler
