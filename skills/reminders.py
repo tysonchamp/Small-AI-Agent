@@ -1,5 +1,6 @@
 import logging
 import dateparser
+import pytz
 from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes, ApplicationBuilder
@@ -9,12 +10,12 @@ import config
 
 async def handle_reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List reminders from /reminders command."""
-    # Assuming the user wants to see their schedule
-    chat_id = update.effective_chat.id
-    msg = await handle_query_schedule(chat_id, "all") # Reuse logic
+    chat_id = str(update.effective_chat.id)
+    msg = await query_schedule(chat_id, "all") # Reuse logic
     await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def check_reminders_job(context: ContextTypes.DEFAULT_TYPE):
+    # Database now expects and returns everything in UTC logic
     reminders = database.get_pending_reminders() # Returns (id, chat_id, content, interval_seconds)
     
     for r in reminders:
@@ -23,10 +24,10 @@ async def check_reminders_job(context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=chat_id, text=f"⏰ *REMINDER*\n\n{content}", parse_mode='Markdown')
             
             if interval > 0:
-                # Reschedule
-                next_time = datetime.now() + timedelta(seconds=interval)
+                # Reschedule - Calculate next run in UTC
+                next_time = datetime.utcnow() + timedelta(seconds=interval)
                 database.reschedule_reminder(r_id, next_time)
-                logging.info(f"Rescheduled reminder {r_id} to {next_time}")
+                logging.info(f"Rescheduled reminder {r_id} to {next_time} UTC")
             else:
                 database.mark_reminder_sent(r_id)
                 logging.info(f"Sent reminder {r_id} to {chat_id}")
@@ -39,30 +40,43 @@ from skills.registry import skill
 async def add_reminder(chat_id, content, time, interval_seconds=0):
     conf = config.load_config()
     tz_str = conf['telegram'].get('timezone', 'Asia/Kolkata')
+    user_tz = pytz.timezone(tz_str)
     
-    # Pass timezone to dateparser settings
+    # "now" in user's timezone for relative parsing
+    now_user = datetime.now(user_tz)
+    
     settings = {
         'PREFER_DATES_FROM': 'future',
+        'RELATIVE_BASE': now_user.replace(tzinfo=None), # dateparser prefers naive base? or aware?
         'TIMEZONE': tz_str,
-        'RETURN_AS_TIMEZONE_AWARE': False # We store naive in DB but assume local time
+        'RETURN_AS_TIMEZONE_AWARE': True 
     }
+    
+    # Dateparser sometimes struggles with aware relative base if not configured perfectly
+    # Let's try parsing.
     dt = dateparser.parse(time, settings=settings)
     
-    # Fallback logic
-    if not dt and time and ("in" in time or "every" in time):
-            pass # dateparser usually handles "in X" well.
-    
     if not dt and interval_seconds > 0:
-            dt = datetime.now() + timedelta(seconds=interval_seconds)
-    
+         dt = now_user + timedelta(seconds=interval_seconds)
+
     if dt:
-        # If dt is aware, convert to naive local time for DB storage simplicity, or store aware?
-        # DB uses simple strings. Let's stick to naive local time matching system execution time.
-        if dt.tzinfo:
-            dt = dt.replace(tzinfo=None)
-            
-        database.add_reminder(chat_id, content, dt, interval_seconds)
-        resp = f"✅ Reminder set: '{content}' at {dt.strftime('%H:%M:%S')}"
+        # If dt is naive, assume it's in user_tz
+        if not dt.tzinfo:
+            dt = user_tz.localize(dt)
+        
+        # Convert to UTC for storage
+        dt_utc = dt.astimezone(pytz.utc)
+        
+        # Create a naive UTC object for DB (sqlite usually prefers matching string format)
+        dt_db = dt_utc.replace(tzinfo=None) # 2026-02-13 12:00:00 (UTC value) via naive
+        
+        database.add_reminder(chat_id, content, dt_db, interval_seconds)
+        
+        # Format for reply in User TZ
+        reply_dt = dt_utc.astimezone(user_tz)
+        formatted_time = reply_dt.strftime('%Y-%m-%d %H:%M:%S %Z')
+        
+        resp = f"✅ Reminder set: '{content}' at {formatted_time}"
         if interval_seconds > 0:
             resp += f" (Every {interval_seconds}s)"
         return resp
@@ -86,35 +100,51 @@ async def cancel_reminder(chat_id, target):
 
 @skill(name="QUERY_SCHEDULE", description="Check upcoming reminders. Params: time_range ('all', 'today', 'tomorrow')")
 async def query_schedule(chat_id, time_range="all"):
-    # Determine start/end time based on range
-    start_t = None
-    end_t = None
+    conf = config.load_config()
+    tz_str = conf['telegram'].get('timezone', 'Asia/Kolkata')
+    user_tz = pytz.timezone(tz_str)
     
-    now = datetime.now()
+    # Determine start/end time in UTC based on User TZ range
+    # But wait, search_reminders does string comparison.
+    # If we store UTC, we must convert our query range to UTC.
+    
+    start_t_utc = None
+    end_t_utc = None
+    
+    now_user = datetime.now(user_tz)
     
     if time_range == "today":
-        start_t = now
-        end_t = now.replace(hour=23, minute=59, second=59)
+        user_start = now_user.replace(hour=0, minute=0, second=0, microsecond=0)
+        user_end = now_user.replace(hour=23, minute=59, second=59, microsecond=999999)
+        start_t_utc = user_start.astimezone(pytz.utc).replace(tzinfo=None)
+        end_t_utc = user_end.astimezone(pytz.utc).replace(tzinfo=None)
+        
     elif time_range == "tomorrow":
-        start_t = now + timedelta(days=1)
-        start_t = start_t.replace(hour=0, minute=0, second=0)
-        end_t = start_t.replace(hour=23, minute=59, second=59)
-    else:
-        # "all" -> Return everything from now onwards? 
-        # Or everything including past pending?
-        # Let's show all pending.
-        pass
+        user_start = (now_user + timedelta(days=1)).replace(hour=0, minute=0, second=0)
+        user_end = user_start.replace(hour=23, minute=59, second=59)
+        start_t_utc = user_start.astimezone(pytz.utc).replace(tzinfo=None)
+        end_t_utc = user_end.astimezone(pytz.utc).replace(tzinfo=None)
     
-    reminders = database.search_reminders(chat_id, start_time=start_t, end_time=end_t)
+    reminders = database.search_reminders(chat_id, start_time=start_t_utc, end_time=end_t_utc)
     
     if not reminders:
         return "📅 You have no upcoming reminders found."
     else:
         msg = "*📅 Upcoming Schedule:*\n"
         for r in reminders:
-            # r = (id, content, remind_at, interval)
-            r_time = r[2] # String from DB
-            msg += f"- *{r[1]}* at {r_time}"
+            # r = (id, content, remind_at_str, interval)
+            try:
+                # Parse DB string (UTC) -> Aware UTC
+                db_dt = datetime.fromisoformat(str(r[2]))
+                db_dt = pytz.utc.localize(db_dt)
+                
+                # Convert to User TZ
+                local_dt = db_dt.astimezone(user_tz)
+                time_str = local_dt.strftime('%d %b %H:%M')
+            except Exception:
+                time_str = str(r[2]) + " (UTC)"
+
+            msg += f"- *{r[1]}* at {time_str}"
             if r[3] > 0:
                     msg += f" (Runs every {r[3]}s)"
             msg += "\n"

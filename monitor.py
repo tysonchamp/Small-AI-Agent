@@ -252,7 +252,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for param_name in sig.parameters:
                 if param_name in params:
                     call_kwargs[param_name] = params[param_name]
-                elif param_name == "chat_id":
+                
+                # Forced Injection (Security & Correctness)
+                # We check these explicitly to override any hallucinated value from the LLM
+                if param_name == "chat_id":
                     call_kwargs["chat_id"] = chat_id
                 elif param_name == "update":
                     call_kwargs["update"] = update

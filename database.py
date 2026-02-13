@@ -127,9 +127,8 @@ def get_pending_reminders():
     # Get reminders that are due (remind_at <= now) and pending
     conn = get_connection()
     c = conn.cursor()
-    # Using datetime('now', 'localtime') might be safer depending on how we store remind_at
-    # For simplicity, we assume remind_at is stored as a comparable string or timestamp
-    c.execute("SELECT id, chat_id, content, interval_seconds FROM reminders WHERE status='pending' AND remind_at <= datetime('now', 'localtime')")
+    # Using datetime('now') which defaults to UTC in SQLite (usually) matches our UTC storage plan
+    c.execute("SELECT id, chat_id, content, interval_seconds FROM reminders WHERE status='pending' AND remind_at <= datetime('now')")
     rows = c.fetchall()
     conn.close()
     return rows
