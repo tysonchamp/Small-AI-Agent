@@ -367,6 +367,32 @@ async def post_init(application: Application):
         ("workflows", "List active system workflows")
     ])
 
+async def check_email_job(context: ContextTypes.DEFAULT_TYPE):
+    """Background job to check unread emails."""
+    try:
+        # Lazy import to avoid circular dependency issues at top level
+        from skills import email_ops
+        
+        conf = config.load_config()
+        chat_id = conf['telegram'].get('chat_id')
+        
+        if not chat_id:
+            return
+
+        # Fetch emails (synchronous call inside async wrapper if needed, but imap is fast enough or use executor)
+        import asyncio
+        if "📭" in summary:
+             logging.info(f"Email Job: Check complete. {summary}")
+        elif "⚠️" in summary:
+             logging.warning(f"Email check issue: {summary}")
+        else:
+             # If it's not empty/warning/no-emails, it must be actual emails
+             logging.info(f"Email Job: Found unread emails. Notification sent.")
+             await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode='Markdown')
+
+    except Exception as e:
+        logging.error(f"Error in check_email_job: {e}")
+
 def main():
     """Start the bot."""
     database.init_db()
@@ -395,22 +421,28 @@ def main():
     application.add_handler(CommandHandler('workflows', workflows_command))
     
     application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & (~filters.COMMAND), handle_message))
-    
-    # Job Queue
+
+    # --- JOB QUEUE SETUP ---
     job_queue = application.job_queue
     
-    # Monitoring Job
-    monitor_interval = conf['monitoring'].get('check_interval_seconds', 300)
-    job_queue.run_repeating(web_monitor.check_websites_job, interval=monitor_interval, first=10)
+    # Website Monitoring Job
+    interval = conf['monitoring'].get('check_interval_seconds', 10800)
+    job_queue.run_repeating(web_monitor.check_websites_job, interval=interval, first=10)
     
-    # Reminder Job (Check every 30 seconds)
+    # Server Health Job (Every 10 mins)
+    job_queue.run_repeating(system_health.check_server_health_job, interval=600, first=30)
+    
+    # Reminder Check Job (Every 30 seconds)
     job_queue.run_repeating(reminders.check_reminders_job, interval=30, first=5)
     
-    # Server Health Job (Check every 10 minutes)
-    job_queue.run_repeating(system_health.check_server_health_job, interval=600, first=15)
-    
-    # Workflow Job (Check every 60 seconds)
+    # Workflow Check Job (Every 1 minute)
     job_queue.run_repeating(workflows.check_workflows_job, interval=60, first=5)
+
+    # Email Check Job
+    email_interval = conf.get('email', {}).get('check_interval_seconds', 1800)
+    job_queue.run_repeating(check_email_job, interval=email_interval, first=20)
+
+    logging.info(f"Jobs scheduled: Monitoring({interval}s), Health(600s), Reminders(30s), Workflows(60s), Email({email_interval}s)")
     
     logging.info("AI Assistant (Modularized) started! Press Ctrl+C to stop.")
     application.run_polling()

@@ -22,6 +22,24 @@ ollama:
   api_key: "" # Change this if you have a different model (e.g. mistral, llama2, etc.)
   # Run 'ollama list' in your terminal to see available models.
 
+email:
+  check_interval_seconds: 1800 # Global check interval
+  accounts:
+    - account_name: "Personal"
+      imap_server: "imap.gmail.com"
+      imap_port: 993
+      username: "your_email@gmail.com"
+      password: "" # Use App Password! 
+      ssl: true
+      enabled: true
+    # - account_name: "Work"
+    #   imap_server: "imap.work.com"
+    #   imap_port: 993
+    #   username: "work@example.com"
+    #   password: ""
+    #   ssl: true
+    #   enabled: true
+
 servers:
   - name: "Local System"
     type: "local"

@@ -22,6 +22,38 @@ def load_config():
             config['GBYTE_ERP_URL'] = os.getenv('GBYTE_ERP_URL', config.get('GBYTE_ERP_URL'))
             config['API_KEY'] = os.getenv('AI_AGENT_API_KEY', config.get('API_KEY'))
             
+            # Email Config
+            if 'email' not in config: config['email'] = {}
+            
+            # Ensure 'accounts' key exists
+            if 'accounts' not in config['email']:
+                config['email']['accounts'] = []
+
+            # Handle Legacy/Env Var Override for FIRST account
+            email_user = os.getenv('EMAIL_USER')
+            email_pass = os.getenv('EMAIL_PASSWORD')
+            email_host = os.getenv('EMAIL_HOST')
+            
+            if email_user and email_pass:
+                # Check if we have any accounts to override
+                if len(config['email']['accounts']) > 0:
+                     # Override the first one
+                     config['email']['accounts'][0]['username'] = email_user
+                     config['email']['accounts'][0]['password'] = email_pass
+                     if email_host: config['email']['accounts'][0]['imap_server'] = email_host
+                else:
+                    # Create default account from env
+                    config['email']['accounts'].append({
+                        'account_name': 'Default',
+                        'username': email_user,
+                        'password': email_pass,
+                        'imap_server': email_host or 'imap.gmail.com',
+                        'ssl': True,
+                        'enabled': True
+                    })
+            
+            # Default values if missing
+            
             # Default values if missing
             if 'ollama' not in config: config['ollama'] = {'model': 'llama3'}
             
