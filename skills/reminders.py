@@ -36,8 +36,15 @@ async def check_reminders_job(context: ContextTypes.DEFAULT_TYPE):
 
 from skills.registry import skill
 
-@skill(name="ADD_REMINDER", description="Set a reminder. Params: content, time. interval_seconds (OPTIONAL): ONLY set if user EXPLICITLY asks for recurring/repeating.")
-async def add_reminder(chat_id, content, time, interval_seconds=0):
+@skill(name="ADD_REMINDER", description="Set a reminder. Params: content, time. interval_seconds (OPTIONAL). target_user (OPTIONAL): Username to remind instead of self.")
+async def add_reminder(chat_id, content, time, interval_seconds=0, target_user=None):
+    if target_user:
+        resolved_id = config.get_user_chat_id(target_user)
+        if resolved_id:
+            chat_id = resolved_id
+        else:
+            return f"❌ User '{target_user}' not found in configuration."
+
     conf = config.load_config()
     tz_str = conf['telegram'].get('timezone', 'Asia/Kolkata')
     user_tz = pytz.timezone(tz_str)
@@ -77,6 +84,8 @@ async def add_reminder(chat_id, content, time, interval_seconds=0):
         formatted_time = reply_dt.strftime('%Y-%m-%d %H:%M:%S %Z')
         
         resp = f"✅ Reminder set: '{content}' at {formatted_time}"
+        if target_user:
+            resp += f" for {target_user}"
         if interval_seconds > 0:
             resp += f" (Every {interval_seconds}s)"
         return resp

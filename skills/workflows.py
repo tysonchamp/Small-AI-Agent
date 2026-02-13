@@ -2,6 +2,7 @@ import logging
 import dateparser
 from datetime import datetime, timedelta
 from telegram.ext import ContextTypes
+import pytz
 
 import config
 import database
@@ -19,7 +20,8 @@ WORKFLOW_TYPES = {
     "SYSTEM_HEALTH": "System Resource Monitoring (CPU, RAM, Disk) - Goes to Bot Owner",
     "ERP_TASKS_REPORT": "Fetch Pending ERP Project Tasks - Goes to Bot Owner (Default Chat)",
     "ERP_INVOICES_REPORT": "Fetch Due ERP Invoices - Goes to Bot Owner (Default Chat)",
-    "NOTIFY_USER": "Send skill output to a SPECIFIC user (Params: target_user, skill_name, skill_params)"
+    "NOTIFY_USER": "Send skill output to a SPECIFIC user (Params: target_user, skill_name, skill_params)",
+    "COMPOSITE_REPORT": "Run MULTIPLE skills and send consolidated report to user (Params: target_user, steps=[{skill, params}])"
 }
 
 def get_workflow_descriptions():
@@ -120,27 +122,82 @@ async def run_notify_user_workflow(context, params):
     # So we can just call it.
     
     await notifications.notify_user(target_user, skill_name, skill_params)
+    await notifications.notify_user(target_user, skill_name, skill_params)
 
+async def run_composite_report_workflow(context, params):
+    """
+    Executes multiple skills and sends a consolidated report to a specific user.
+    Params: target_user, intro_text, steps=[{"skill": "name", "params": {}}]
+    """
+    target_user = params.get('target_user')
+    intro_text = params.get('intro_text', "📊 *Composite Report*")
+    steps = params.get('steps', [])
+    
+    # Resolve User
+    chat_id = config.get_user_chat_id(target_user)
+    if not chat_id:
+        logging.error(f"Composite Workflow Failed: Target user '{target_user}' not found.")
+        return
+
+    report_msg = f"{intro_text}\n\n"
+    
+    for step in steps:
+        skill_name = step.get('skill')
+        skill_params = step.get('params', {})
+        
+        if skill_name in registry.TOOLS:
+            tool_def = registry.TOOLS[skill_name]
+            func = tool_def["func"]
+            
+            try:
+                # Helper to call async/sync functions
+                import inspect
+                import asyncio
+                
+                # Check signature to inject dependencies if needed (though usually skills take simple params)
+                # For workflows, we might need to be careful about what params we pass.
+                # Simplest assumption: Skill params map 1:1 to function args.
+                
+                if inspect.iscoroutinefunction(func):
+                    result = await func(**skill_params)
+                else:
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, lambda: func(**skill_params))
+                
+                report_msg += f"--- {skill_name} ---\n{result}\n\n"
+                
+            except Exception as e:
+                report_msg += f"⚠️ Error executing {skill_name}: {e}\n\n"
+        else:
+            report_msg += f"⚠️ Unknown Skill: {skill_name}\n\n"
+            
+    # Send Final Report
+    await context.bot.send_message(chat_id=chat_id, text=report_msg, parse_mode='Markdown')
 
 async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
     """Generic job to check and run dynamic workflows."""
     workflows = database.get_active_workflows()
-    now = datetime.now()
+    now = datetime.utcnow()
     
     for w in workflows:
         try:
             next_run_str = w['next_run_time']
             try:
                 # Try standard format first
+                # We assume stored time is naive UTC string
                 next_run = datetime.strptime(next_run_str, '%Y-%m-%d %H:%M:%S.%f')
             except ValueError:
                 try:
-                        # Fallback to dateparser
-                        next_run = dateparser.parse(next_run_str)
+                    # Fallback to dateparser
+                    # If dateparser returns aware, convert to naive UTC
+                    # If naive, assume UTC
+                    next_run = dateparser.parse(next_run_str)
+                    if next_run.tzinfo:
+                         next_run = next_run.astimezone(pytz.utc).replace(tzinfo=None)
                 except:
                         next_run = None
             
-            logging.info(f"Checking Workflow {w['id']} ({w['type']}): Now={now}, Next={next_run}")
+            logging.info(f"Checking Workflow {w['id']} ({w['type']}): Now(UTC)={now}, Next={next_run}")
 
             if not next_run:
                 logging.warning(f"Could not parse next_run for workflow {w['id']}: {next_run_str}")
@@ -153,13 +210,20 @@ async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
                 if w['type'] == 'BRIEFING':
                     await run_briefing_workflow(context, w['params'])
                 elif w['type'] == 'SYSTEM_HEALTH':
-                    await run_system_health_workflow(context, w['params'])
+                     await run_system_health_workflow(context, w['params'])
                 elif w['type'] == 'ERP_TASKS' or w['type'] == 'ERP_TASKS_REPORT':
                     await run_erp_tasks_workflow(context, w['params'])
+                elif w['type'] == 'ERP_TASKS_REPORT,SYSTEM_STATUS': # Handle legacy/hallucinated type
+                     # Split and run both? Or just ignore bad type?
+                     # Let's run ERP tasks as best effort
+                     await run_erp_tasks_workflow(context, w['params'])
+                     await run_system_health_workflow(context, w['params'])
                 elif w['type'] == 'ERP_INVOICES' or w['type'] == 'ERP_INVOICES_REPORT':
                     await run_erp_invoices_workflow(context, w['params'])
                 elif w['type'] == 'NOTIFY_USER':
                     await run_notify_user_workflow(context, w['params'])
+                elif w['type'] == 'COMPOSITE_REPORT':
+                    await run_composite_report_workflow(context, w['params'])
                 
                 # SCHEDULE NEXT RUN
                 interval = w['interval_seconds']
@@ -176,24 +240,51 @@ async def check_workflows_job(context: ContextTypes.DEFAULT_TYPE):
 
 from skills.registry import skill
 
-@skill(name="SCHEDULE_WORKFLOW", description='Schedule a recurring task. Params: type, params (JSON string), time (e.g. "tomorrow at 9am"), interval_seconds')
-async def schedule_workflow(type: str, params: str = "{}", time: str = "now", interval_seconds: int = 0):
+@skill(name="SCHEDULE_WORKFLOW", description='Schedule a recurring task. Params: type, params (JSON string or dict), time (e.g. "tomorrow at 9am"), interval_seconds')
+async def schedule_workflow(type: str, params = "{}", time: str = "now", interval_seconds: int = 0):
     import json
-    try:
-        params_dict = json.loads(params)
-    except json.JSONDecodeError:
-        return "⚠️ Error: params must be a valid JSON string."
+    
+    params_dict = {}
+    if isinstance(params, dict):
+        params_dict = params
+    elif isinstance(params, str):
+        try:
+            params_dict = json.loads(params)
+        except json.JSONDecodeError:
+            return "⚠️ Error: params must be a valid JSON string."
+    else:
+        # Fallback
+        params_dict = {}
 
     dt = dateparser.parse(time, settings={'PREFER_DATES_FROM': 'future'})
     if not dt:
-        # Try to parse relative time "in 5 minutes", "every hour"
-        # For now, default to now if fail, or return error?
-        # User might say "every hour", let's assume 'now' start.
-        dt = datetime.now() 
+        dt = datetime.utcnow() # Default to Now UTC
+    else:
+        # If dt has no timezone, assume it's User Local (IST usually from config)
+        # But we don't have user config here easily without loading.
+        # Let's assume input text like "tomorrow 9am" implies User Local.
+        # We need to convert it to UTC for DB.
+        conf = config.load_config()
+        tz_str = conf['telegram'].get('timezone', 'Asia/Kolkata')
+        local_tz = pytz.timezone(tz_str)
+        
+        if not dt.tzinfo:
+            dt = local_tz.localize(dt)
+        
+        dt = dt.astimezone(pytz.utc).replace(tzinfo=None) # Convert to naive UTC
 
     database.add_workflow(type, params_dict, interval_seconds, dt)
     
-    resp = f"✅ Scheduled *{type}* starting at {dt.strftime('%Y-%m-%d %H:%M:%S')}"
+    # Reponse in Local time
+    conf = config.load_config()
+    tz_str = conf['telegram'].get('timezone', 'Asia/Kolkata')
+    local_tz = pytz.timezone(tz_str)
+    
+    # dt is naive UTC now
+    dt_aware = pytz.utc.localize(dt)
+    dt_local = dt_aware.astimezone(local_tz)
+    
+    resp = f"✅ Scheduled *{type}* starting at {dt_local.strftime('%Y-%m-%d %H:%M:%S %Z')}"
     if interval_seconds > 0:
         resp += f" (Runs every {interval_seconds}s)"
     return resp
@@ -212,7 +303,7 @@ def list_workflows():
         return msg
 
 
-@skill(name="CANCEL_WORKFLOW", description="Cancel/Delete a scheduled workflow. Params: workflow_id (int) OR workflow_type (str).")
+@skill(name="CANCEL_WORKFLOW", description="Cancel/Delete a scheduled workflow. Params: workflow_id (int) OR workflow_type (str). To cancel ALL, pass workflow_type='ALL'.")
 def cancel_workflow(workflow_id=None, workflow_type=None):
     """Cancels a workflow by ID or Type."""
     if workflow_id:

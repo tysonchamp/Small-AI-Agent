@@ -150,6 +150,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- Intelligent Intent Classification ---
     import json
     import pytz
+    from skills import workflows
     
     tz_str = conf['telegram'].get('timezone', 'UTC')
     tz = pytz.timezone(tz_str)
@@ -166,12 +167,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     2. "CLEAR_MEMORY": Use this when the user explicitly asks to "clear memory", "forget everything", or "reset chat".
 
     --- RULES ---
-    - If the user specifies a target recipient (e.g. "send to tyson", "notify admin"), you MUST use the "NOTIFY_USER" workflow type.
-    - If no recipient is specified, use the default report workflows (e.g. ERP_TASKS_REPORT) which send to the bot owner.
-    - ONLY use "WEB_SEARCH" if the user explicitly asks for real-time information, news, or external data not in your knowledge. For general questions, use "CHAT".
+    1. If the user specifies a target recipient (e.g. "send to tyson", "notify admin"), you MUST use the "NOTIFY_USER" workflow type.
+    2. If the user asks for MULTIPLE things (e.g. "check X AND Y", "fetch A and B"), you MUST use "COMPOSITE_REPORT".
+       - Do NOT schedule two separate workflows.
+       - Do NOT pick just one.
+       - Structure the `steps` array with the correct skill names.
+    3. If no recipient is specified, use the default report workflows (e.g. ERP_TASKS_REPORT) which send to the bot owner.
+    4. ONLY use "WEB_SEARCH" if the user explicitly asks for real-time information.
+    5. **CRITICAL**: For "every X" (recurring) workflows, you MUST calculate `interval_seconds` correctly.
+       - "every hour" -> 3600
+       - "every 30 minutes" -> 1800
+       - "every day" -> 86400
+       - If `interval_seconds` is 0, the workflow will only run ONCE and delete itself.
     
     --- AVAILABLE SKILLS ---
 {registry.get_system_prompt_tools()}
+
+    --- WORKFLOW TYPES (for SCHEDULE_WORKFLOW) ---
+{workflows.get_workflow_descriptions()}
     ------------------------
 
     Output Format:
@@ -186,6 +199,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "Setup a workflow to check pending tasks every hour" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_TASKS_REPORT", "time": "now", "interval_seconds": 3600}}}}
     "Schedule invoice check daily at 9am" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_INVOICES_REPORT", "time": "9am", "interval_seconds": 86400}}}}
     "Send pending tasks to tyson every morning" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "NOTIFY_USER", "params": "{{\"target_user\": \"tyson\", \"skill_name\": \"ERP_TASKS\"}}", "time": "tomorrow at 9am", "interval_seconds": 86400}}}}
+    "Fetch pending tasks and system health every hour" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "COMPOSITE_REPORT", "params": "{{\"target_user\": \"default\", \"intro_text\": \"📊 *Hourly Combined Report*\", \"steps\": [{{\"skill\": \"ERP_TASKS\"}}, {{\"skill\": \"SYSTEM_HEALTH\"}}] }}", "time": "now", "interval_seconds": 3600}}}}
+    "Check system health AND pending tasks every hour for tyson" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "COMPOSITE_REPORT", "params": "{{\"target_user\": \"tyson\", \"steps\": [{{\"skill\": \"SYSTEM_HEALTH\"}}, {{\"skill\": \"ERP_TASKS\"}}] }}", "time": "now", "interval_seconds": 3600}}}}
     "Cancel BRIEFING workflows" -> {{"action": "CANCEL_WORKFLOW", "params": {{"workflow_type": "BRIEFING"}}}}
     "Forget everything" -> {{"action": "CLEAR_MEMORY", "params": {{}}}}
     """

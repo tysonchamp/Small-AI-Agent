@@ -32,3 +32,40 @@ def load_config():
     except yaml.YAMLError as e:
         logging.error(f"Error parsing configuration file: {e}")
         return None
+
+def get_user_chat_id(username):
+    """
+    Resolves a username to a chat_id from config.yaml.
+    Case-insensitive match on username.
+    """
+    conf = load_config()
+    if not conf:
+        return None
+    
+    users = conf.get('telegram', {}).get('users', {})
+    
+    # Direct match
+    if username in users:
+        return str(users[username])
+        
+    # Case-insensitive match
+    target = username.lower()
+    for u, cid in users.items():
+        if u.lower() == target:
+            return str(cid)
+            
+    # Smart Substring Match (e.g. "suman da" -> matches "suman")
+    # We look for the LONGEST configured username that appears in the requested input.
+    matches = []
+    for u, cid in users.items():
+        u_lower = u.lower()
+        if u_lower in target:
+            matches.append((u, cid))
+            
+    if matches:
+        # Sort by length of the username (descending) to get specific matches first
+        # e.g. input "Alexander", matches "Alex", "Al". We want "Alex".
+        matches.sort(key=lambda x: len(x[0]), reverse=True)
+        return str(matches[0][1])
+
+    return None

@@ -193,14 +193,14 @@ def search_reminders(chat_id, query_text=None, start_time=None, end_time=None):
 
 def add_workflow(type, params, interval_seconds, next_run_time=None):
     if not next_run_time:
-        next_run_time = datetime.now()
+        next_run_time = datetime.utcnow()
         
     conn = get_connection()
     c = conn.cursor()
     # Ensure params is a dict before dumping? 
     # The caller passes a dict usually.
     c.execute("INSERT INTO workflows (type, params, interval_seconds, next_run_time, created_at) VALUES (?, ?, ?, ?, ?)",
-              (type, json.dumps(params), interval_seconds, next_run_time, datetime.now()))
+              (type, json.dumps(params), interval_seconds, next_run_time, datetime.utcnow()))
     conn.commit()
     w_id = c.lastrowid
     conn.close()

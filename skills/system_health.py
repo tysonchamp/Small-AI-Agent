@@ -150,7 +150,7 @@ def format_health_report(health_data):
 
 from skills.registry import skill
 
-@skill(name="SYSTEM_STATUS", description="Check comprehensive system health (Local + SSH).")
+@skill(name="SYSTEM_HEALTH", description="Check comprehensive system health (Local + SSH).")
 def get_system_status(conf=None):
     if not conf:
         conf = config.load_config()
