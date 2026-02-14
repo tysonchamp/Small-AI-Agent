@@ -19,7 +19,7 @@ def skill(name=None, description=None):
         
         # Get parameters (simple introspection)
         sig = inspect.signature(func)
-        param_names = [p.name for p in sig.parameters.values() if p.name not in ['self', 'cls']]
+        param_names = [p.name for p in sig.parameters.values() if p.name not in ['self', 'cls', 'chat_id']]
 
         TOOLS[tool_name] = {
             "func": func,

@@ -155,12 +155,21 @@ def check_emails(limit=5):
     try:
         logging.info(f"Generating summary for {email_count} emails using {model}...")
         prompt = (
-            f"You are a helpful personal assistant. The user has {email_count} unread emails. "
-            "Below is the raw content of these emails. "
-            "Please provide a concise and well-formatted summary of these emails. "
-            "Group them by sender or topic if relevant. "
-            "Highlight any important actions or deadlines. "
-            "Keep it professional and easy to read on a mobile screen.\n\n"
+            f"""You are an extremely efficient executive assistant. Your task is to summarize {email_count} unread emails for a busy professional reading on a mobile device.
+
+            Extract ONLY the critical information, facts, and required actions. Do not include any conversational filler, pleasantries, or introductory phrases like "Here is the summary."
+
+            Format your output EXACTLY using the structure below. Group related emails by Sender or Topic.
+
+            ### [Sender Name or Main Topic]
+            * **Action Required / Deadline:** [State explicitly, or write "None" if n/a]
+            * [Bullet point detailing the most important fact or request]
+            * [Bullet point detailing additional specific information]
+
+            Begin the summary now:
+
+            RAW EMAILS:
+            """
             f"{combined_email_content}"
         )
         

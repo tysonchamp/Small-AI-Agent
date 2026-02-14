@@ -256,26 +256,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("🌐 *Web Dashboard*: http://<YOUR_IP>:8000/dashboard", parse_mode='Markdown')
 
         elif action in registry.TOOLS:
+            # Execute registered skill
             tool_def = registry.TOOLS[action]
             func = tool_def["func"]
+            
+            # Prepare params
+            call_kwargs = {}
             
             # Introspection
             import inspect
             import functools
             sig = inspect.signature(func)
-            call_kwargs = {}
-            for param_name in sig.parameters:
-                if param_name in params:
-                    call_kwargs[param_name] = params[param_name]
-                
-                # Forced Injection (Security & Correctness)
-                # We check these explicitly to override any hallucinated value from the LLM
-                if param_name == "chat_id":
-                    call_kwargs["chat_id"] = chat_id
-                elif param_name == "update":
-                    call_kwargs["update"] = update
-                elif param_name == "context":
-                    call_kwargs["context"] = context
+            
+            # Autowire system arguments if requested by the skill
+            if 'chat_id' in sig.parameters:
+                call_kwargs['chat_id'] = str(chat_id)
+            if 'update' in sig.parameters:
+                call_kwargs['update'] = update
+            if 'context' in sig.parameters:
+                call_kwargs['context'] = context
+
+            # Map LLM params
+            for p in tool_def["params"]:
+                if p in params:
+                    call_kwargs[p] = params[p]
 
             logging.info(f"Executing Skill: {action}")
             await update.message.reply_text(f"⚡ Executing {action}...", disable_notification=True)
@@ -381,6 +385,9 @@ async def check_email_job(context: ContextTypes.DEFAULT_TYPE):
 
         # Fetch emails (synchronous call inside async wrapper if needed, but imap is fast enough or use executor)
         import asyncio
+        loop = asyncio.get_running_loop()
+        summary = await loop.run_in_executor(None, email_ops.check_emails)
+
         if "📭" in summary:
              logging.info(f"Email Job: Check complete. {summary}")
         elif "⚠️" in summary:
