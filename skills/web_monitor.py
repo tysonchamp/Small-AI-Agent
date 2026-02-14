@@ -46,7 +46,7 @@ def analyze_changes_with_ollama(old_content, new_content, model):
     
     prompt = f"""
     You are a website monitoring assistant. Verify if there are meaningful changes between the old and new website content below.
-    Ignore minor changes like timestamps, CSRF tokens, dynamic ads, or slight formatting differences.
+    Ignore minor changes like timestamps, CSRF tokens, dynamic ads, slight formatting differences, or currency/localization changes (e.g. USD vs INR).
     
     Return your analysis in STRICT JSON format with two keys:
     1. "has_meaningful_change": boolean (true if meaningful changes exist, false otherwise)
@@ -129,7 +129,11 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
             # Run blocking request in a separate thread
             # Modified get_website_content to return status code as well, or we handle it here
             import requests
-            headers = {'User-Agent': 'Mozilla/5.0 (compatible; AIWebsiteMonitor/1.0)'}
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (compatible; AIWebsiteMonitor/1.0)',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache'
+            }
             response = await loop.run_in_executor(None, lambda: requests.get(url, headers=headers, timeout=30))
             status_code = response.status_code
             response.raise_for_status()
