@@ -31,6 +31,7 @@ The bot is organized into modular `skills/`:
 - **📝 Notes**: Quick note taking and retrieval (Admin only).
 - **💻 System Ops**: Execute shell commands on the host machine (Admin only).
 - **📢 Notifications**: Send notifications to Telegram users (to Assigned Chat ID by Admin).
+- **📧 Email Integration**: Check and summarize emails (Admin only).
 
 ---
 
@@ -115,13 +116,14 @@ python3 monitor.py
 | `/reminders` | List active reminders |
 | `/workflows` | List active system workflows |
 | `/note [text]` | Quick save a note |
+| `/emails` | Check and summarize emails |
 
 ### 💻 Web Chat Commands
 The Web Chat (`/chat`) supports similar commands:
-- `/help`, `/status`, `/notes`, `/reminders`, `/workflows`, `/note [text]`
+- `/help`, `/status`, `/notes`, `/reminders`, `/workflows`, `/note [text]`, `/emails`
 - **Note**: Reminders created in Web Chat are linked to the configured Telegram ID.
 
-### �️ Natural Language Examples
+### ️ Natural Language Examples
 | Feature | User Input Example |
 | :--- | :--- |
 | **Chat** | "How does a binary search work?" |
@@ -134,6 +136,7 @@ The Web Chat (`/chat`) supports similar commands:
 | **Workflows** | "Schedule a morning briefing every day at 8am." |
 | **System Ops** | "Execute `ls -la`" / "Check disk usage" |
 | **Notifications** | "Send Pending Task notification to Tyson" |
+| **Emails** | "Check and summarize emails" |
 
 ---
 

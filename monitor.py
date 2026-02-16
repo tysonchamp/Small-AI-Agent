@@ -75,7 +75,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📸 Image Analysis\n"
         "🌐 Web Search & Summarization\n"
         "⚙️ System Workflows & Health Monitoring\n"
-        "💼 ERP Integration (Tasks, Invoices, Credentials)\n",
+        "💼 ERP Integration (Tasks, Invoices, Credentials)\n"
+        "📧 Email Integration (Check and summarize emails)\n",
         parse_mode='Markdown'
     )
 
@@ -92,6 +93,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/reminders - List active reminders\n"
         "/status - Check system health\n"
         "/dashboard - Get Web Dashboard link\n"
+        "/emails - List unread emails\n"
         "/workflows - List active system workflows",
         parse_mode='Markdown'
     )
