@@ -6,7 +6,9 @@ import imaplib
 import email
 from email.header import decode_header
 from skills.registry import skill
-
+import database
+from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime
 def clean_text(text):
     """Cleans/decodes email subject headers."""
     if not text:
@@ -104,25 +106,72 @@ def check_emails(limit=5):
             mail.login(username, password)
             mail.select("inbox")
             
-            # Search for unread emails
-            status, messages = mail.search(None, 'UNSEEN')
+            # Search for emails since today (IMAP granularity is day)
+            # We fetch a bit more than needed (today) and filter precisely in Python
+            cutoff_time = datetime.now() - timedelta(minutes=15)
+            date_criterion = cutoff_time.strftime("%d-%b-%Y")
+            
+            status, messages = mail.search(None, f'(SINCE "{date_criterion}")')
             if status != "OK":
                 logging.warning(f"Failed to search emails for {account_name}")
                 continue
             
             email_ids = messages[0].split()
+            logging.info(f"Account {account_name}: Found {len(email_ids)} recent emails (since {date_criterion}). Checking specifics...")
+
             if not email_ids:
                 continue
             
-            # Get latest 'limit' emails
-            latest_email_ids = email_ids[-limit:]
-            latest_email_ids.reverse() # Newest first
+            # Process from oldest to newest to maintain order, but since we want duplicates check
+            # we iterate all.
             
-            for e_id in latest_email_ids:
+            for e_id in email_ids:
+                # Fetch headers only first to filter
+                res, msg_data = mail.fetch(e_id, "(BODY.PEEK[HEADER.FIELDS (DATE MESSAGE-ID)])")
+                if not msg_data or not msg_data[0]:
+                    continue
+                
+                raw_headers = msg_data[0][1]
+                msg_headers = email.message_from_bytes(raw_headers)
+                
+                # 1. Check Message-ID (Deduplication)
+                message_id = msg_headers.get("Message-ID", "").strip()
+                if not message_id:
+                    # Fallback to hash if no ID? For now skip to be safe/lazy
+                    continue
+                    
+                if database.is_email_processed(message_id):
+                    logging.debug(f"Skipping duplicate email {message_id}")
+                    continue
+                
+                # 2. Check Date (Time Window)
+                email_date_str = msg_headers.get("Date")
+                if email_date_str:
+                    try:
+                        email_dt = parsedate_to_datetime(email_date_str)
+                        # Ensure cutoff is timezone aware if email_dt is
+                        if email_dt.tzinfo is not None and cutoff_time.tzinfo is None:
+                             cutoff_aware = cutoff_time.replace(tzinfo=email_dt.tzinfo) # Approximate
+                             # Better: Convert both to UTC
+                             pass 
+                        
+                        # Simple comparison: Convert email to naive local or make cutoff aware
+                        # Let's use timestamp comparison to be safe
+                        if email_dt.timestamp() < cutoff_time.timestamp():
+                            logging.debug(f"Skipping old email from {email_date_str}")
+                            continue
+                    except Exception as e:
+                        logging.warning(f"Failed to parse date {email_date_str}: {e}")
+                        # If date parse fails, maybe include it? or skip? Default include to be safe?
+                        # Let's skip to avoid spamming old stuff
+                        continue
+
+                # Is New! Fetch Body
                 email_count += 1
-                # Fetch the email body (RFC822)
-                res, msg_data = mail.fetch(e_id, "(RFC822)")
-                for response_part in msg_data:
+                database.mark_email_processed(message_id, account_name)
+                
+                res, full_data = mail.fetch(e_id, "(RFC822)")
+                for response_part in full_data:
                     if isinstance(response_part, tuple):
                         msg = email.message_from_bytes(response_part[1])
                         

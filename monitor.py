@@ -368,8 +368,15 @@ async def post_init(application: Application):
         ("reminders", "Show your reminders"),
         ("status", "Check system status"),
         ("dashboard", "Get link to Web Dashboard"),
-        ("workflows", "List active system workflows")
+        ("workflows", "List active system workflows"),
+        ("check_email", "Force an immediate email check")
     ])
+
+async def force_email_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Manually trigger email check."""
+    await update.message.reply_text("📧 Checking emails now...")
+    await check_email_job(context)
+    await update.message.reply_text("✅ Check complete.")
 
 async def check_email_job(context: ContextTypes.DEFAULT_TYPE):
     """Background job to check unread emails."""
@@ -426,6 +433,7 @@ def main():
     application.add_handler(CommandHandler('status', authorized_only(system_health.handle_status_command)))
     application.add_handler(CommandHandler('dashboard', dashboard_command))
     application.add_handler(CommandHandler('workflows', workflows_command))
+    application.add_handler(CommandHandler('check_email', force_email_check))
     
     application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & (~filters.COMMAND), handle_message))
 

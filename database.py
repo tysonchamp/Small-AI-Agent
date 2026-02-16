@@ -72,6 +72,13 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # Email History Table (Deduplication)
+    c.execute('''CREATE TABLE IF NOT EXISTS email_history
+                 (message_id TEXT PRIMARY KEY, 
+                  account TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    # Auto-cleanup old entries? Maybe later.
+
     conn.commit()
     conn.close()
 
@@ -188,6 +195,26 @@ def search_reminders(chat_id, query_text=None, start_time=None, end_time=None):
     rows = c.fetchall()
     conn.close()
     return rows
+
+# --- Email History Functions ---
+def is_email_processed(message_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT 1 FROM email_history WHERE message_id=?", (message_id,))
+    row = c.fetchone()
+    conn.close()
+    return row is not None
+
+def mark_email_processed(message_id, account):
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO email_history (message_id, account) VALUES (?, ?)", (message_id, account))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass # Already exists
+    finally:
+        conn.close()
 
 # --- Workflow Functions ---
 
