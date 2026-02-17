@@ -102,6 +102,23 @@ def analyze_changes_with_ollama(old_content, new_content, model):
         logging.error(f"Error querying Ollama: {e}")
         return f"Error analyzing changes with AI: {e}"
 
+async def send_safe_message(bot, chat_id, text):
+    """
+    Sends a message to Telegram with fallback to plain text if Markdown parsing fails.
+    """
+    try:
+        # Attempt 1: Standard Markdown (Legacy)
+        # Convert ** to * for bold compatibility with legacy Markdown
+        md_text = text.replace("**", "*")
+        await bot.send_message(chat_id=chat_id, text=md_text, parse_mode='Markdown')
+    except Exception as e:
+        logging.warning(f"Markdown send failed: {e}. Retrying with plain text.")
+        try:
+            # Attempt 2: Plain Text
+            await bot.send_message(chat_id=chat_id, text=text)
+        except Exception as e2:
+            logging.error(f"Failed to send notification even in plain text: {e2}")
+
 async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
     logging.info("Starting scheduled website check...")
     conf = config.load_config()
@@ -125,6 +142,11 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
         status_code = 0
         error_msg = None
         
+        # Fetch previous state to decide if notification is needed
+        c.execute("SELECT last_error, status_code FROM websites WHERE url=?", (url,))
+        row = c.fetchone()
+        previous_error = row[0] if row else None
+        
         try:
             # Run blocking request in a separate thread
             # Modified get_website_content to return status code as well, or we handle it here
@@ -139,10 +161,28 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
             response.raise_for_status()
             current_content = response.text
             
+            # If we recover from an error, notify? (Optional, skipping for now to keep it simple as requested)
+            if previous_error:
+                 logging.info(f"Website {url} recovered from error: {previous_error}")
+                 # You might want a "Resolution" notification here later.
+            
         except Exception as e:
             error_msg = str(e)
-            logging.error(f"Error checking {url}: {e}")
             
+            # Log warning for connection errors to reduce noise, error for others
+            if "Name or service not known" in str(e) or "Connection refused" in str(e):
+                 logging.warning(f"Connection issue checking {url}: {e}")
+            else:
+                 logging.error(f"Error checking {url}: {e}")
+            
+            # Send Notification if error is NEW or DIFFERENT
+            # We compare string representation of errors.
+            if chat_id and error_msg != previous_error:
+                notification_text = f"⚠️ *Website Error Detected!* \n\nURL: {url}\nError: {error_msg}"
+                # Use safely
+                await send_safe_message(context.bot, chat_id, notification_text)
+                logging.info(f"Sent error notification for {url}")
+
             # Update DB with error
             c.execute("UPDATE websites SET last_checked=?, last_error=?, status_code=? WHERE url=?",
                       (time.strftime('%Y-%m-%d %H:%M:%S'), error_msg, status_code, url))
@@ -180,12 +220,10 @@ async def check_websites_job(context: ContextTypes.DEFAULT_TYPE):
                 summary_text = analysis
                 msg = f"📢 *Website Change Detected!* \n\nURL: {url}\n\nAI Analysis:\n{analysis}"
                 if chat_id:
-                    try:
-                        await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
-                    except Exception as send_e:
-                         logging.error(f"Failed to send change notification: {send_e}")
+                     await send_safe_message(context.bot, chat_id, msg)
             else:
                 logging.info(f"No meaningful changes for {url}. Notification suppressed.")
+
 
             c.execute("UPDATE websites SET content_hash=?, last_checked=?, last_content=?, status_code=?, last_error=?, last_summary=? WHERE url=?",
                       (current_hash, time.strftime('%Y-%m-%d %H:%M:%S'), current_content, status_code, None, summary_text, url))
