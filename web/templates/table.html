@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database: {{ table_name }} - AI Assistant</title> 
+    <title>Database: {{ table_name }} - AI Assistant</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -196,6 +196,83 @@
         .back-link:hover {
             color: var(--primary);
         }
+
+        /* Custom Tooltip */
+        .custom-tooltip {
+            display: none;
+            position: fixed;
+            background: #1f2937;
+            border: 1px solid #4b5563;
+            color: #f9fafb;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            max-width: 400px;
+            z-index: 1000;
+            pointer-events: none;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 2000;
+            backdrop-filter: blur(4px);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: #1f2937;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            max-width: 800px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            color: #f9fafb;
+            position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            border: 1px solid #374151;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: #9ca3af;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background-color: #374151;
+            color: #f9fafb;
+        }
+
+        .clickable-cell {
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+
+        .clickable-cell:hover {
+            background-color: rgba(99, 102, 241, 0.1);
+        }
     </style>
 </head>
 
@@ -278,7 +355,7 @@
                             {% for row in rows %}
                             <tr>
                                 {% for cell in row %}
-                                <td title="{{ cell }}">{{ cell }}</td>
+                                <td class="clickable-cell">{{ cell }}</td>
                                 {% endfor %}
                             </tr>
                             {% endfor %}
@@ -314,6 +391,97 @@
             {% endif %}
         </div>
     </div>
+    <!-- Tooltip & Modal Containers -->
+    <div id="tooltip" class="custom-tooltip"></div>
+    <div id="modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-close">&times;</div>
+            <h2 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.25rem; color: #6366f1;">Full Content</h2>
+            <div id="modal-text" style="white-space: pre-wrap; font-family: inherit; line-height: 1.6; color: #d1d5db;">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tooltip Logic
+        const tooltip = document.getElementById('tooltip');
+        const cells = document.querySelectorAll('.clickable-cell');
+
+        cells.forEach(cell => {
+            // Hover for Tooltip
+            cell.addEventListener('mouseenter', (e) => {
+                const text = cell.innerText.trim();
+                // Show tooltip if text is long enough (e.g. > 20 chars) or if it looks truncated
+                // Simple heuristic: just show if not empty
+                if (text.length > 0) {
+                    tooltip.innerText = text;
+                    // Cap tooltip length if it's HUGE
+                    if (text.length > 500) {
+                        tooltip.innerText = text.substring(0, 500) + '... (Click to view full)';
+                    }
+                    tooltip.style.display = 'block';
+                    updateTooltipPos(e);
+                }
+            });
+
+            cell.addEventListener('mousemove', updateTooltipPos);
+
+            cell.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+
+            // Click for Modal
+            cell.addEventListener('click', () => {
+                showModal(cell.innerText);
+            });
+        });
+
+        function updateTooltipPos(e) {
+            const offset = 15;
+            let left = e.clientX + offset;
+            let top = e.clientY + offset;
+
+            // Boundary checks
+            if (left + tooltip.clientWidth > window.innerWidth) {
+                left = e.clientX - tooltip.clientWidth - offset;
+            }
+            if (top + tooltip.clientHeight > window.innerHeight) {
+                top = e.clientY - tooltip.clientHeight - offset;
+            }
+
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+        }
+
+        // Modal Logic
+        const modal = document.getElementById('modal');
+        const modalText = document.getElementById('modal-text');
+        const closeBtn = document.querySelector('.modal-close');
+
+        function showModal(text) {
+            modalText.innerText = text;
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // Prevent scrolling bg
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+
+        closeBtn.addEventListener('click', closeModal);
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.style.display === 'flex') {
+                closeModal();
+            }
+        });
+    </script>
 </body>
 
 </html>

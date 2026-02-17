@@ -77,7 +77,24 @@ def init_db():
                  (message_id TEXT PRIMARY KEY, 
                   account TEXT,
                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    # Auto-cleanup old entries? Maybe later.
+                  
+    # Content Research Tables
+    c.execute('''CREATE TABLE IF NOT EXISTS clients
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  name TEXT,
+                  niche TEXT,
+                  frequency TEXT DEFAULT 'daily',
+                  last_post_date TIMESTAMP,
+                  extra_notes TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS posts
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  client_id INTEGER,
+                  content TEXT,
+                  status TEXT DEFAULT 'pending',
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY(client_id) REFERENCES clients(id))''')
 
     conn.commit()
     conn.close()
@@ -215,6 +232,67 @@ def mark_email_processed(message_id, account):
         pass # Already exists
     finally:
         conn.close()
+
+# --- Content Research Functions ---
+
+def add_client(name, niche, frequency='daily', extra_notes=None):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("INSERT INTO clients (name, niche, frequency, extra_notes) VALUES (?, ?, ?, ?)", 
+              (name, niche, frequency, extra_notes))
+    conn.commit()
+    conn.close()
+
+def get_clients():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, name, niche, frequency, last_post_date, extra_notes FROM clients")
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def get_client_by_name(name):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, name, niche, frequency, last_post_date, extra_notes FROM clients WHERE name=?", (name,))
+    row = c.fetchone()
+    conn.close()
+    return row
+
+def add_post(client_id, content, status='pending'):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("INSERT INTO posts (client_id, content, status) VALUES (?, ?, ?)", 
+              (client_id, content, status))
+    conn.commit()
+    conn.close()
+
+def get_pending_posts():
+    conn = get_connection()
+    c = conn.cursor()
+    # Join with clients to get client name
+    c.execute('''SELECT p.id, c.name, p.content, p.created_at 
+                 FROM posts p 
+                 JOIN clients c ON p.client_id = c.id 
+                 WHERE p.status='pending' 
+                 ORDER BY p.created_at DESC''')
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def update_post_status(post_id, status):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE posts SET status=? WHERE id=?", (status, post_id))
+    conn.commit()
+    conn.close()
+
+def update_client_last_post_date(client_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE clients SET last_post_date=datetime('now') WHERE id=?", (client_id,))
+    conn.commit()
+    conn.close()
 
 # --- Workflow Functions ---
 

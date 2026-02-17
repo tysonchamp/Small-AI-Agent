@@ -11,7 +11,7 @@ import config
 import database
 
 # Import Skills
-from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry, notifications, system_ops
+from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry, notifications, system_ops, content_researcher
 
 import os
 from logging.handlers import RotatingFileHandler
@@ -459,7 +459,11 @@ def main():
     email_interval = conf.get('email', {}).get('check_interval_seconds', 1800)
     job_queue.run_repeating(check_email_job, interval=email_interval, first=20)
 
-    logging.info(f"Jobs scheduled: Monitoring({interval}s), Health(600s), Reminders(30s), Workflows(60s), Email({email_interval}s)")
+    # Content Research Job (Every 4 hours = 14400 seconds)
+    # Check if we should run it less frequently? Daily is fine, but checking every 4 hours if a daily post is due is safer.
+    job_queue.run_repeating(content_researcher.research_content_job, interval=14400, first=60)
+
+    logging.info(f"Jobs scheduled: Monitoring({interval}s), Health(600s), Reminders(30s), Workflows(60s), Email({email_interval}s), ContentResearch(4h)")
     
     logging.info("AI Assistant (Modularized) started! Press Ctrl+C to stop.")
     application.run_polling()
