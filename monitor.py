@@ -11,7 +11,8 @@ import config
 import database
 
 # Import Skills
-from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry, notifications, system_ops, content_researcher
+from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry, notifications, system_ops, content_researcher, seo_expert, meta_coder
+from agents import meta_agent
 
 import os
 from logging.handlers import RotatingFileHandler
@@ -247,6 +248,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         action = intent.get("action")
         params = intent.get("params", {})
         
+        # If the LLM generates params as a string by mistake, try to parse it or wrap it
+        raw_params_str = None
+        if isinstance(params, str):
+            raw_params_str = params
+            try:
+                params = json.loads(params)
+            except json.JSONDecodeError:
+                logging.warning(f"Extracted params is a string but not valid JSON: {params}")
+                if "=" in params:
+                    k, v = params.split("=", 1)
+                    params = {k.strip(): v.strip()}
+                else:
+                    params = {}
+                    
+        if not isinstance(params, dict):
+            params = {}
+        
         # --- EXECUTE ACTION ---
         response_text = ""
         
@@ -282,6 +300,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for p in tool_def["params"]:
                 if p in params:
                     call_kwargs[p] = params[p]
+            
+            # Absolute fallback: if no params were mapped but we had a raw string, and the tool expects a param
+            if not any(p in params for p in tool_def["params"]) and raw_params_str and tool_def["params"]:
+                # Just inject the raw string into the first expected parameter
+                first_param = tool_def["params"][0]
+                call_kwargs[first_param] = raw_params_str
+                logging.warning(f"Fallback: mapping raw string to {first_param}")
 
             logging.info(f"Executing Skill: {action}")
             await update.message.reply_text(f"⚡ Executing {action}...", disable_notification=True)
@@ -424,7 +449,9 @@ def main():
         logging.error("Bot token not set in config.yaml")
         return
 
-    application = ApplicationBuilder().token(bot_token).post_init(post_init).build()
+    application = ApplicationBuilder().token(bot_token)\
+        .connect_timeout(30.0).read_timeout(30.0).write_timeout(30.0)\
+        .post_init(post_init).build()
     
     # Handlers - WRAPPED WITH AUTH DECORATOR
     application.add_handler(CommandHandler('start', start))

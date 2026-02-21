@@ -30,7 +30,8 @@ project_root/
 │   ├── static/          # CSS/JS
 │   └── templates/       # Jinja2 HTML templates
 ├── logs/                # Runtime logs (git-ignored)
-└── debug/               # Scratchpad scripts (git-ignored)
+├── debug/               # Scratchpad scripts (git-ignored)
+└── agents/              # Sub-agents
 ```
 
 ---
