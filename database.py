@@ -86,7 +86,12 @@ def init_db():
                   frequency TEXT DEFAULT 'daily',
                   last_post_date TIMESTAMP,
                   extra_notes TEXT,
+                  status TEXT DEFAULT 'active',
                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    try:
+        c.execute("ALTER TABLE clients ADD COLUMN status TEXT DEFAULT 'active'")
+    except sqlite3.OperationalError:
+        pass
 
     c.execute('''CREATE TABLE IF NOT EXISTS posts
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -246,7 +251,7 @@ def add_client(name, niche, frequency='daily', extra_notes=None):
 def get_clients():
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT id, name, niche, frequency, last_post_date, extra_notes FROM clients")
+    c.execute("SELECT id, name, niche, frequency, last_post_date, extra_notes, status FROM clients")
     rows = c.fetchall()
     conn.close()
     return rows
@@ -254,10 +259,54 @@ def get_clients():
 def get_client_by_name(name):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT id, name, niche, frequency, last_post_date, extra_notes FROM clients WHERE name=?", (name,))
+    c.execute("SELECT id, name, niche, frequency, last_post_date, extra_notes, status FROM clients WHERE name=?", (name,))
     row = c.fetchone()
     conn.close()
     return row
+
+def find_clients_like(name_pattern):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, name, niche, frequency, last_post_date, extra_notes, status FROM clients WHERE name LIKE ?", (f"%{name_pattern}%",))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def update_client(client_id, name=None, niche=None, frequency=None, extra_notes=None):
+    conn = get_connection()
+    c = conn.cursor()
+    # Build dynamic update query
+    updates = []
+    params = []
+    if name:
+        updates.append("name=?")
+        params.append(name)
+    if niche:
+        updates.append("niche=?")
+        params.append(niche)
+    if frequency:
+        updates.append("frequency=?")
+        params.append(frequency)
+    if extra_notes:
+        updates.append("extra_notes=?")
+        params.append(extra_notes)
+        
+    if updates:
+        query = f"UPDATE clients SET {', '.join(updates)} WHERE id=?"
+        params.append(client_id)
+        c.execute(query, params)
+        conn.commit()
+    conn.close()
+
+def delete_client(client_id):
+    conn = get_connection()
+    c = conn.cursor()
+    # Delete associated posts first (manual cascade)
+    c.execute("DELETE FROM posts WHERE client_id=?", (client_id,))
+    # Delete client
+    c.execute("DELETE FROM clients WHERE id=?", (client_id,))
+    conn.commit()
+    conn.close()
 
 def add_post(client_id, content, status='pending'):
     conn = get_connection()
@@ -291,6 +340,14 @@ def update_client_last_post_date(client_id):
     conn = get_connection()
     c = conn.cursor()
     c.execute("UPDATE clients SET last_post_date=datetime('now') WHERE id=?", (client_id,))
+    conn.commit()
+    conn.commit()
+    conn.close()
+
+def update_client_status(client_id, status):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE clients SET status=? WHERE id=?", (status, client_id))
     conn.commit()
     conn.close()
 

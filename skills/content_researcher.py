@@ -12,12 +12,92 @@ def add_content_client(name, niche, frequency="daily", extra_notes=None):
     try:
         existing = database.get_client_by_name(name)
         if existing:
-            return f"⚠️ Client '{name}' already exists."
+            return f"⚠️ Client '{name}' already exists. Use `UPDATE_CONTENT_CLIENT` to modify details."
         
         database.add_client(name, niche, frequency, extra_notes)
         return f"✅ Client '{name}' added! I will research content for the '{niche}' niche {frequency}."
     except Exception as e:
         return f"⚠️ Error adding client: {e}"
+
+@skill(name="UPDATE_CONTENT_CLIENT", description="Update details for an existing content client. Params: client_name, niche (optional), frequency (optional), extra_notes (optional)")
+def update_content_client(client_name, niche=None, frequency=None, extra_notes=None):
+    client = database.get_client_by_name(client_name)
+    if not client:
+        # Try fuzzy search
+        matches = database.find_clients_like(client_name)
+        if len(matches) == 1:
+            client = matches[0]
+            client_name = client[1] # Update name for report
+        elif len(matches) > 1:
+            names = [m[1] for m in matches]
+            return f"⚠️ Client '{client_name}' not found. Did you mean one of these? {', '.join(names)}"
+        else:
+            return f"⚠️ Client '{client_name}' not found."
+    
+    database.update_client(client[0], niche=niche, frequency=frequency, extra_notes=extra_notes)
+    
+    updates = []
+    if niche: updates.append(f"Niche -> {niche}")
+    if frequency: updates.append(f"Freq -> {frequency}")
+    if extra_notes: updates.append("Notes Updated")
+    
+    return f"✅ Client '{client_name}' updated: {', '.join(updates) if updates else 'No changes provided'}"
+
+    return f"✅ Client '{client_name}' updated: {', '.join(updates) if updates else 'No changes provided'}"
+
+@skill(name="REMOVE_CONTENT_CLIENT", description="Permanently remove a client and their posts. Params: client_name")
+def remove_content_client(client_name):
+    client = database.get_client_by_name(client_name)
+    if not client:
+        # Try fuzzy search
+        matches = database.find_clients_like(client_name)
+        if len(matches) == 1:
+            client = matches[0]
+            client_name = client[1] # Update name for report
+        elif len(matches) > 1:
+            names = [m[1] for m in matches]
+            return f"⚠️ Client '{client_name}' not found. Did you mean one of these? {', '.join(names)}"
+        else:
+            return f"⚠️ Client '{client_name}' not found."
+    
+    database.delete_client(client[0])
+    return f"🗑️ Client '{client_name}' and their history have been permanently deleted."
+
+@skill(name="DEACTIVATE_CONTENT_CLIENT", description="Stop research/posting for a client. Params: client_name")
+def deactivate_content_client(client_name):
+    client = database.get_client_by_name(client_name)
+    if not client:
+        # Try fuzzy search
+        matches = database.find_clients_like(client_name)
+        if len(matches) == 1:
+            client = matches[0]
+            client_name = client[1]
+        elif len(matches) > 1:
+            names = [m[1] for m in matches]
+            return f"⚠️ Client '{client_name}' not found. Did you mean one of these? {', '.join(names)}"
+        else:
+            return f"⚠️ Client '{client_name}' not found."
+    
+    database.update_client_status(client[0], 'inactive')
+    return f"🛑 Content research for '{client_name}' has been PAUSED."
+
+@skill(name="REACTIVATE_CONTENT_CLIENT", description="Resume research/posting for a client. Params: client_name")
+def reactivate_content_client(client_name):
+    client = database.get_client_by_name(client_name)
+    if not client:
+        # Try fuzzy search
+        matches = database.find_clients_like(client_name)
+        if len(matches) == 1:
+            client = matches[0]
+            client_name = client[1]
+        elif len(matches) > 1:
+            names = [m[1] for m in matches]
+            return f"⚠️ Client '{client_name}' not found. Did you mean one of these? {', '.join(names)}"
+        else:
+            return f"⚠️ Client '{client_name}' not found."
+    
+    database.update_client_status(client[0], 'active')
+    return f"✅ Content research for '{client_name}' has been RESUMED."
 
 @skill(name="LIST_PENDING_CONTENT", description="List social media posts waiting for review.")
 def list_pending_content():
@@ -60,8 +140,12 @@ async def research_content_job(context):
         results_summary = []
         
         for client in clients:
-            # client: id, name, niche, frequency, last_post_date, extra_notes
-            c_id, name, niche, frequency, last_post_date, extra_notes = client
+            # client: id, name, niche, frequency, last_post_date, extra_notes, status
+            c_id, name, niche, frequency, last_post_date, extra_notes, status = client
+            
+            if status != 'active':
+                continue
+
             
             should_run = False
             last_dt = None
