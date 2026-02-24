@@ -1,37 +1,63 @@
 # 🤖 Personal AI Assistant
 
-A powerful, modular, and self-hosted AI assistant that combines **website monitoring**, **ERP integration**, **system health checks**, **web search**, and **personal organization** into a single Telegram bot and Web Interface. Powered by **Ollama** for local, private intelligence.
+A powerful, self-hosted AI assistant that combines **website monitoring**, **ERP integration**, **system health checks**, **web search**, **email management**, and **personal organization** into a single platform. Accessible via **Telegram Bot** and a **Web Dashboard**. Built with **LangChain** and powered by **Ollama** for local, private intelligence.
+
+---
 
 ## ✨ Features
 
 ### 🧠 Core Intelligence
-- **Persistent Memory**: Remembers context from previous conversations.
-- **Natural Language Understanding**: Chat naturally to trigger complex actions.
-- **Local Privacy**: Runs 100% locally using Ollama (Llama 3, Mistral, Gemma, etc.).
+- **Prompt-Based Tool Routing** — Works with any LLM (no native tool calling required).
+- **Persistent Memory** — ChromaDB-backed conversation history.
+- **Local Privacy** — Runs 100% locally using Ollama (Gemma, Qwen, Mistral, etc.).
+- **Non-Blocking** — All background tasks run concurrently without freezing the bot.
 
-### 🌐 Web Interface (New!)
-A rich web-based dashboard for easier management.
-**URL**: `http://localhost:8000/`
+### 🌐 Web Dashboard
+**URL:** `http://localhost:8000/`
 
-- **Dashboard**: Real-time view of Server Health (CPU/RAM/Disk/Uptime) and Website Status.
-- **Live Logs**: Real-time streaming logs from background processes.
-- **Database Viewer**: Browse and search through your SQLite database tables (Notes, Reminders, Websites).
-- **Web Chat**: A full-featured chat interface to interact with the AI from your browser.
-- **Dark Mode**: Sleek dark theme for all pages.
+- **Server Health** — Real-time CPU, RAM, Disk, and Uptime for local + remote servers.
+- **Website Monitor** — Status overview of all monitored websites with AI-powered change summaries.
+- **Live Logs** — Streaming logs from all background processes.
+- **Database Viewer** — Browse, search, filter, and sort any SQLite table.
+- **Web Chat** — Full chat interface to interact with the AI from your browser.
+- **Dark Theme** — Sleek, modern dark UI.
 
-### Skills & Modules
-The bot is organized into modular `skills/`:
+### 🛠️ Tools & Capabilities
 
-- **👁️ Web Monitor**: Tracks changes on specified websites and sends AI summaries (Admin only).
-- **💼 ERP Integration**: Manage Tasks, Invoices, and Credentials via natural language (Admin only).
-- **🌐 Web Search**: Real-time search and content summarization (Admin only).
-- **🖥️ System Health**: Monitor local and remote (SSH) server resources (Admin only).
-- **⏰ Reminders**: Natural language reminders ("Remind me in 10 mins") (Admin only).
-- **⚙️ Workflows**: Automated recurring tasks (e.g., Daily Briefings) (Admin only).
-- **📝 Notes**: Quick note taking and retrieval (Admin only).
-- **💻 System Ops**: Execute shell commands on the host machine (Admin only).
-- **📢 Notifications**: Send notifications to Telegram users (to Assigned Chat ID by Admin).
-- **📧 Email Integration**: Check and summarize emails (Admin only).
+| Tool | Description |
+|:---|:---|
+| 👁️ **Web Monitor** | Tracks changes on websites and sends AI-powered change summaries |
+| 💼 **ERP Integration** | Manage Tasks, Invoices, Credentials via natural language |
+| 🌐 **Web Search** | Real-time DuckDuckGo search and content summarization |
+| 🖥️ **System Health** | Monitor local and remote (SSH) servers |
+| ⏰ **Reminders** | Natural language scheduling ("Remind me in 10 mins") |
+| ⚙️ **Workflows** | Automated recurring tasks (daily briefings, reports) |
+| 📝 **Notes** | Quick note taking and retrieval |
+| 💻 **System Ops** | Execute shell commands on the host |
+| 📧 **Email** | Check and summarize emails via IMAP |
+| 📢 **Notifications** | Send notifications to Telegram users |
+| 📰 **Content Research** | AI-powered content generation for clients |
+| 🔍 **SEO Analysis** | Website SEO auditing and recommendations |
+| 🧩 **Meta Coder** | Dynamically create new tools at runtime |
+
+---
+
+## � Project Structure
+
+```
+├── app.py                 # Entry point (Telegram + Web Server)
+├── config/config.yaml     # Configuration
+├── core/
+│   ├── agent.py           # Prompt-based agent with tool routing
+│   ├── llm.py             # Ollama LLM setup
+│   ├── database.py        # SQLite database layer
+│   └── memory.py          # ChromaDB chat memory
+├── tools/                 # LangChain @tool functions (13 modules)
+├── bot/telegram_bot.py    # Telegram handlers & job scheduler
+├── web/                   # FastAPI dashboard, chat, templates
+├── service/               # Systemd service config
+└── _legacy/               # Old pre-LangChain code (reference)
+```
 
 ---
 
@@ -39,110 +65,110 @@ The bot is organized into modular `skills/`:
 
 ### 1. Prerequisites
 - **Python 3.10+**
-- **Ollama** installed and running (`ollama serve`).
-- **Telegram Bot Token** (from @BotFather).
-- **Telegram Chat ID** (from @userinfobot).
+- **Ollama** installed and running (`ollama serve`)
+- **Telegram Bot Token** (from [@BotFather](https://t.me/BotFather))
+- **Telegram Chat ID** (from [@userinfobot](https://t.me/userinfobot))
 
 ### 2. Clone & Install
 ```bash
 git clone https://github.com/tysonchamp/Small-AI-Agent.git
 cd Small-AI-Agent
 
-# Create Virtual Environment
+# Create virtual environment
 python3 -m venv venv
 source venv/bin/activate
 
-# Install Dependencies
+# Install dependencies
 pip install -r requirements.txt
 ```
 
 ### 3. Configuration
-Copy the example config and edit it:
 ```bash
 cp config/config.yaml.example config/config.yaml
 nano config/config.yaml
 ```
+
 **Key Settings:**
-- `telegram.bot_token`: Your Bot Token. (get from @BotFather)
-- `telegram.chat_id`: Your user ID (get from @userinfobot).
-- `agent.name` & `agent.persona`: Customize the bot's identity.
-- `monitoring.websites`: List of sites to watch.
-- `servers`: List of SSH servers to monitor.
-- `ollama` : Ollama server URL and model name and api key (optional). 
+
+| Setting | Description |
+|:---|:---|
+| `telegram.bot_token` | Your Bot Token (from @BotFather) |
+| `telegram.chat_id` | Your user ID (from @userinfobot) |
+| `agent.name` / `agent.persona` | Bot personality |
+| `monitoring.websites` | List of sites to watch |
+| `servers` | SSH servers to monitor |
+| `ollama.model` | Ollama model name (e.g., `gemma3:latest`) |
+| `ollama.host` | Ollama server URL |
+| `GBYTE_ERP_URL` | ERP API base URL |
 
 ---
 
-## 🏃‍♂️ Running the Bot
+## 🏃 Running
 
-### ➤ Managed Service (Recommended)
-This installs the bot as a systemd service (`ai-assistant`), ensuring it starts on boot and restarts on failure.
-
-**Install:**
+### Systemd Service (Recommended)
 ```bash
-sudo ./install_service.sh
+sudo systemctl start ai-assistant      # Start
+sudo systemctl stop ai-assistant       # Stop
+sudo systemctl restart ai-assistant    # Restart (after code changes)
+sudo systemctl status ai-assistant     # Check status
 ```
 
-**Manage:**
+### Manual (Development)
 ```bash
-sudo systemctl start ai-assistant    # Start
-sudo systemctl stop ai-assistant     # Stop
-sudo systemctl restart ai-assistant  # Restart (Use this after code changes)
-sudo systemctl status ai-assistant   # Check status
+sudo systemctl stop ai-assistant       # Stop service first
+python3 app.py                         # Run manually
 ```
 
-> **⚠️ IMPORTANT:** Do not run `./start.sh` manually if the service is running! It will cause conflicts.
-
-### ➤ Manual Run (Debugging)
-```bash
-# Stop service first
-sudo systemctl stop ai-assistant
-
-# Run manually
-python3 monitor.py
-```
+> ⚠️ Don't run both at the same time — it causes Telegram polling conflicts.
 
 ---
 
-## 💬 Usage Guide
+## 💬 Usage
 
-### 📱 Telegram Bot Commands
+### Telegram Commands
+
 | Command | Description |
-| :--- | :--- |
-| `/start` | Restart/Initialize the bot |
+|:---|:---|
+| `/start` | Initialize the bot |
 | `/help` | Show available commands |
-| `/dashboard` | Get likely to Web Dashboard |
-| `/status` | Check System Health |
+| `/dashboard` | Link to Web Dashboard |
+| `/status` | Check system health |
 | `/notes` | List saved notes |
 | `/reminders` | List active reminders |
-| `/workflows` | List active system workflows |
+| `/workflows` | List active workflows |
 | `/note [text]` | Quick save a note |
 | `/emails` | Check and summarize emails |
 
-### 💻 Web Chat Commands
-The Web Chat (`/chat`) supports similar commands:
-- `/help`, `/status`, `/notes`, `/reminders`, `/workflows`, `/note [text]`, `/emails`
-- **Note**: Reminders created in Web Chat are linked to the configured Telegram ID.
+### Natural Language Examples
 
-### ️ Natural Language Examples
-| Feature | User Input Example |
-| :--- | :--- |
+| Intent | Example |
+|:---|:---|
 | **Chat** | "How does a binary search work?" |
-| **Search** | "Search web for RTX 5090 release date." |
-| **Summarize** | "Summarize this video: https://youtu.be/..." |
-| **ERP** | "Show pending tasks." / "Search invoices for Acme." |
-| **System** | "Check system status." |
-| **Reminders** | "Remind me to backup DB in 2 hours." |
-| **Notes** | "Note: Buy milk." / "Show notes." |
-| **Workflows** | "Schedule a morning briefing every day at 8am." |
-| **System Ops** | "Execute `ls -la`" / "Check disk usage" |
-| **Notifications** | "Send Pending Task notification to Tyson" |
-| **Emails** | "Check and summarize emails" |
+| **Search** | "Search web for RTX 5090 release date" |
+| **ERP** | "Show pending tasks" / "Search invoices for Acme" |
+| **System** | "Check system status" |
+| **Reminders** | "Remind me to backup DB in 2 hours" |
+| **Notes** | "Note: Buy milk" / "Show notes" |
+| **Workflows** | "Schedule a morning briefing every day at 8am" |
+| **Shell** | "Execute `ls -la`" / "Check disk usage" |
+| **Email** | "Check my emails" |
+
+### Web Chat
+Access at `http://localhost:8000/chat` — supports the same commands and natural language.
 
 ---
 
 ## 🔧 Troubleshooting
 
-- **Logs**: Check `logs/monitor.log` for errors.
-- **Service Status**: `sudo systemctl status ai-assistant`.
-- **Bot Conflict**: If you see "Conflict: terminated by other getUpdates request", ensure only **one** instance is running.
-- **Web Interface Not Loading**: Ensure port `8000` is open and `monitor.py` is running.
+| Issue | Solution |
+|:---|:---|
+| **Runtime errors** | Check `logs/monitor.log` |
+| **Service status** | `sudo systemctl status ai-assistant` |
+| **Bot conflict** | Ensure only one instance is running |
+| **Web not loading** | Check port 8000 and that `app.py` is running |
+| **LLM errors** | Verify Ollama is running: `curl http://localhost:11434/api/tags` |
+
+---
+
+## 📜 License
+[MIT License](LICENSE)
