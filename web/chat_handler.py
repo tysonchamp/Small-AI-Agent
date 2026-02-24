@@ -1,137 +1,87 @@
+"""
+Web Chat Handler
+Uses the shared LangChain agent for web-based chat.
+"""
 import logging
-import json
-import ai_client
-from datetime import datetime
-import config
-import database
-from skills import notes, reminders, system_health, workflows
+import asyncio
+from core.agent import create_agent
+import config as app_config
+
 
 class ChatHandler:
     def __init__(self):
-        self.conf = config.load_config()
-        self.model = self.conf['ollama'].get('model', 'gemma3:latest')
-        self.client = ai_client.get_client()
-
-    async def process_message(self, user_message, chat_id="web-user"):
-        """
-        Process a message from a user (Web or Telegram) and return a response.
-        """
-        logging.info(f"ChatHandler processing message from {chat_id}: {user_message}")
+        self._agent = None
+    
+    def _get_agent(self):
+        if self._agent is None:
+            self._agent = create_agent()
+        return self._agent
+    
+    async def process_message(self, user_message: str) -> str:
+        """Process a message from the web chat and return a response."""
+        logging.info(f"WebChat processing: {user_message}")
         
-        # 1. Check for simple commands (Legacy support for /command style)
+        # Handle simple commands
         if user_message.startswith('/'):
-            return await self.handle_legacy_command(user_message, chat_id)
-
-        # 2. Intent Classification via LLM
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            return await self._handle_command(user_message)
         
-        system_prompt = f"""
-        You are an intelligent assistant. 
-        Current Time: {current_time}
+        # Handle clear memory
+        if user_message.lower().strip() in ["clear memory", "forget everything", "reset chat"]:
+            from core.memory import clear_memory
+            return clear_memory()
         
-        Analyze the user's message and determine the optimal action.
-        Return ONLY a JSON object.
-        
-        Possible Actions:
-        1. "ADD_REMINDER": User wants to set a reminder.
-           - content: what to remind
-           - time: natural language time
-        
-        2. "NOTE_ADD": User wants to save a note.
-           - content: note content
-        
-        3. "NOTE_LIST": User wants to see notes.
-        
-        4. "SYSTEM_STATUS": User asks about server/system health.
-        
-        5. "CHAT": General conversation, knowledge, or if no other action fits.
-        
-        JSON Format: {{ "action": "ACTION_NAME", "params": {{ ... }} }}
-        """
-
         try:
-            response = self.client.chat(model=self.model, messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': user_message}
-            ])
-            intent_str = response['message']['content'].strip()
+            agent = self._get_agent()
             
-            # Extract JSON
-            import re
-            match = re.search(r'\{.*\}', intent_str, re.DOTALL)
-            if match:
-                intent_data = json.loads(match.group(0))
-            else:
-                intent_data = {"action": "CHAT"}
-
-            return await self.execute_action(intent_data, user_message, chat_id)
-
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: agent.invoke({"input": user_message, "chat_history": []})
+            )
+            
+            return result.get("output", "I couldn't process that request.")
         except Exception as e:
-            logging.error(f"Error in ChatHandler: {e}")
-            return f"Error processing request: {str(e)}"
-
-    async def execute_action(self, intent, original_message, chat_id):
-        action = intent.get('action')
-        params = intent.get('params', {})
-        
-        if action == 'NOTE_ADD':
-            content = params.get('content')
-            if content:
-                notes.handle_add_note(content)
-                return "✅ Note saved."
-            return "What should I write in the note?"
-            
-        elif action == 'NOTE_LIST':
-            return notes.handle_list_notes()
-            
-        elif action == 'SYSTEM_STATUS':
-            return system_health.get_system_status(self.conf)
-            
-        elif action == 'ADD_REMINDER':
-            return "Reminders via Web are partially supported (saved to DB, but no push notification yet unless Telegram ID matches)."
-            
-        elif action == 'CHAT':
-            # Perform actual chat response
-            chat_response = self.client.chat(model=self.model, messages=[
-                {'role': 'system', 'content': "You are a helpful AI assistant. Answer concisely."},
-                {'role': 'user', 'content': original_message}
-            ])
-            return chat_response['message']['content']
-            
-        return "I understood the intent but don't have a handler for it yet."
-
-    async def handle_legacy_command(self, message, chat_id):
+            logging.error(f"WebChat error: {e}", exc_info=True)
+            return f"⚠️ Error: {str(e)[:200]}"
+    
+    async def _handle_command(self, message: str) -> str:
+        """Handle legacy /command style messages."""
         cmd = message.split()[0].lower()
+        
         if cmd == '/status':
-             return system_health.get_system_status(self.conf)
+            from tools.system_health import get_system_status
+            return get_system_status.invoke({})
+        
         elif cmd == '/notes':
-             return notes.handle_list_notes()
+            from tools.notes import list_notes
+            return list_notes.invoke({"limit": 10})
+        
         elif cmd == '/note':
-             content = message[6:].strip()
-             return notes.handle_add_note(content)
+            content = message[6:].strip()
+            if content:
+                from core import database
+                database.add_note(content)
+                return "✅ Note saved."
+            return "Usage: /note [content]"
+        
         elif cmd == '/reminders':
-             # Web user doesn't have a chat_id context usually, so we might need a default or passed one
-             # For now, using the passed chat_id (which is 'web-user' by default)
-             # But reminders are stored by chat_id. 
-             # If web user is same as telegram user, they need to set it in config or we use a shared one.
-             # For now, let's just try to list them for the 'web-user' or the config chat_id?
-             # The system is designed for single user mostly.
-             real_chat_id = self.conf['telegram'].get('chat_id')
-             if real_chat_id:
-                 return await reminders.handle_query_schedule(real_chat_id, "all")
-             return "No Telegram Chat ID configured."
+            from tools.reminders import query_schedule
+            return query_schedule.invoke({"time_range": "all"})
+        
         elif cmd == '/workflows':
-             return workflows.handle_list_workflows()
+            from tools.workflows import list_workflows
+            return list_workflows.invoke({})
+        
         elif cmd == '/help':
-             return (
-                 "🤖 *Web Chat Help*\n\n"
-                 "Commands:\n"
-                 "/status - Check system health\n"
-                 "/notes - List your notes\n"
-                 "/reminders - List active reminders\n"
-                 "/workflows - List active workflows\n"
-                 "/note [content] - Add a note\n\n"
-                 "Or just chat with me naturally!"
-             )
-             
+            return (
+                "🤖 *Web Chat Help*\n\n"
+                "Commands:\n"
+                "/status - Check system health\n"
+                "/notes - List your notes\n"
+                "/reminders - List active reminders\n"
+                "/workflows - List active workflows\n"
+                "/note [content] - Add a note\n\n"
+                "Or just chat with me naturally!"
+            )
+        
         return "Unknown command. Try asking in natural language."

@@ -1,0 +1,499 @@
+import time
+import logging
+import asyncio
+import ollama
+import io
+from datetime import datetime
+from telegram import Update
+from telegram.ext import Application, ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+
+import config
+import database
+
+# Import Skills
+from skills import web_monitor, reminders, workflows, notes, web_search, system_health, erp, registry, notifications, system_ops, content_researcher, seo_expert, meta_coder
+from agents import meta_agent
+
+import os
+from logging.handlers import RotatingFileHandler
+
+# Configure logging
+log_dir = "logs"
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "monitor.log")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=1), # 5MB, 1 backup
+        logging.StreamHandler()
+    ],
+    force=True
+)
+logging.getLogger("telegram").setLevel(logging.DEBUG)
+
+# --- Authorization Decorator ---
+from functools import wraps
+
+def authorized_only(func):
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        conf = config.load_config()
+        # Ensure IDs are compared as strings to avoid type mismatches
+        admin_id = str(conf['telegram'].get('chat_id', '')).strip()
+        user_id = str(update.effective_chat.id).strip()
+        
+        if not admin_id:
+            logging.error("Admin Chat ID not configured! allowing all for safety? No, blocking all.")
+            await update.message.reply_text("⛔ Configuration Error: Admin ID not set.")
+            return
+
+        if admin_id != user_id:
+            logging.warning(f"⛔ Unauthorized access attempt from {user_id} ({update.effective_user.first_name})")
+            # Optional: Notify admin that someone tried to access? 
+            # await context.bot.send_message(chat_id=admin_id, text=f"⚠️ Unauthorized access attempt from {user_id}")
+            await update.message.reply_text("⛔ Unauthorized access. This is a private bot.")
+            return
+        
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
+# --- Main Assistant Logic ---
+
+@authorized_only
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    conf = config.load_config()
+    agent_name = conf.get('agent', {}).get('name', 'AI Assistant')
+    
+    await update.message.reply_text(
+        f"👋 *{agent_name} Online*\n\n"
+        "**Features:**\n"
+        "🔍 Website Monitoring (Background)\n"
+        "🧠 Persistent Memory (I remember our chat)\n"
+        "📝 Notes (Type `/note content`)\n"
+        "⏰ Reminders (Type `Remind me to...`)\n"
+        "📸 Image Analysis\n"
+        "🌐 Web Search & Summarization\n"
+        "⚙️ System Workflows & Health Monitoring\n"
+        "💼 ERP Integration (Tasks, Invoices, Credentials)\n"
+        "📧 Email Integration (Check and summarize emails)\n",
+        parse_mode='Markdown'
+    )
+
+@authorized_only
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🤖 *AI Assistant Help*\n\n"
+        "Just chat with me normally! I understand natural language.\n\n"
+        "*Commands:*\n"
+        "/start - Restart bot\n"
+        "/help - Show this message\n"
+        "/note [content] - Save a quick note\n"
+        "/notes - List your notes\n"
+        "/reminders - List active reminders\n"
+        "/status - Check system health\n"
+        "/dashboard - Get Web Dashboard link\n"
+        "/emails - List unread emails\n"
+        "/workflows - List active system workflows",
+        parse_mode='Markdown'
+    )
+
+@authorized_only
+async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🌐 *Web Dashboard*: http://localhost:8000/\n"
+        "💬 *Chat Interface*: http://localhost:8000/chat\n"
+        "*Note*: If you are accessing this from a different device, use your computer's IP address instead of localhost.",
+        parse_mode='Markdown'
+    )
+
+@authorized_only
+async def workflows_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = workflows.handle_list_workflows()
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+@authorized_only
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Debug log for ANY update
+    logging.info(f"Update received: {update}")
+    
+    if not update.message:
+        return
+
+    user_message = update.message.text
+    chat_id = str(update.message.chat_id)
+    
+    # Handle Image Analysis
+    images = []
+    if update.message.photo:
+        # Get largest photo
+        try:
+             photo_file = await update.message.photo[-1].get_file()
+             import io
+             img_byte_arr = io.BytesIO()
+             await photo_file.download_to_memory(img_byte_arr)
+             images.append(img_byte_arr.getvalue())
+             # If no caption, treat as "Describe this"
+             if not user_message:
+                 user_message = update.message.caption or "Describe this image."
+        except Exception as e:
+             logging.error(f"Error downloading photo: {e}")
+             await update.message.reply_text("Failed to process image.")
+             return
+
+    logging.info(f"Processing message from {chat_id}: {user_message}")
+    
+    conf = config.load_config()
+    model = conf['ollama'].get('model', 'gemma3:latest')
+    
+    agent_name = conf.get('agent', {}).get('name', 'AI Assistant')
+    persona = conf.get('agent', {}).get('persona', 'You are a helpful assistant.')
+
+    # --- Intelligent Intent Classification ---
+    import json
+    import pytz
+    from skills import workflows
+    
+    tz_str = conf['telegram'].get('timezone', 'UTC')
+    tz = pytz.timezone(tz_str)
+    current_time = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S %Z')
+    
+    system_prompt = f"""
+    You are {agent_name}. {persona}
+    Current Time: {current_time}
+    
+    Analyze the user's message and determine the optimal action.
+    Return ONLY a JSON object.
+    
+    1. "CHAT": General knowledge, history, cultural facts, or coding help. Use this for greetings ("hi", "hello") and general conversation.
+    2. "CLEAR_MEMORY": Use this when the user explicitly asks to "clear memory", "forget everything", or "reset chat".
+
+    --- RULES ---
+    1. If the user specifies a target recipient (e.g. "send to tyson", "notify admin"), you MUST use the "NOTIFY_USER" workflow type.
+    2. If the user asks for MULTIPLE things (e.g. "check X AND Y", "fetch A and B"), you MUST use "COMPOSITE_REPORT".
+       - Do NOT schedule two separate workflows.
+       - Do NOT pick just one.
+       - Structure the `steps` array with the correct skill names.
+    3. If no recipient is specified, use the default report workflows (e.g. ERP_TASKS_REPORT) which send to the bot owner.
+    4. ONLY use "WEB_SEARCH" if the user explicitly asks for real-time information.
+    5. **CRITICAL**: For "every X" (recurring) workflows, you MUST calculate `interval_seconds` correctly.
+       - "every hour" -> 3600
+       - "every 30 minutes" -> 1800
+       - "every day" -> 86400
+       - If `interval_seconds` is 0, the workflow will only run ONCE and delete itself.
+    
+    --- AVAILABLE SKILLS ---
+{registry.get_system_prompt_tools()}
+
+    --- WORKFLOW TYPES (for SCHEDULE_WORKFLOW) ---
+{workflows.get_workflow_descriptions()}
+    ------------------------
+
+    Output Format:
+    {{
+      "action": "ACTION_NAME",
+      "params": {{ ... }}
+    }}
+    
+    Examples:
+    "Who won the Super Bowl?" -> {{"action": "WEB_SEARCH", "params": {{"query": "Super Bowl winner 2025"}}}}
+    "Show me pending tasks" -> {{"action": "ERP_TASKS", "params": {{}}}}
+    "Setup a workflow to check pending tasks every hour" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_TASKS_REPORT", "time": "now", "interval_seconds": 3600}}}}
+    "Schedule invoice check daily at 9am" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "ERP_INVOICES_REPORT", "time": "9am", "interval_seconds": 86400}}}}
+    "Send pending tasks to tyson every morning" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "NOTIFY_USER", "params": "{{\"target_user\": \"tyson\", \"skill_name\": \"ERP_TASKS\"}}", "time": "tomorrow at 9am", "interval_seconds": 86400}}}}
+    "Fetch pending tasks and system health every hour" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "COMPOSITE_REPORT", "params": "{{\"target_user\": \"default\", \"intro_text\": \"📊 *Hourly Combined Report*\", \"steps\": [{{\"skill\": \"ERP_TASKS\"}}, {{\"skill\": \"SYSTEM_HEALTH\"}}] }}", "time": "now", "interval_seconds": 3600}}}}
+    "Check system health AND pending tasks every hour for tyson" -> {{"action": "SCHEDULE_WORKFLOW", "params": {{"type": "COMPOSITE_REPORT", "params": "{{\"target_user\": \"tyson\", \"steps\": [{{\"skill\": \"SYSTEM_HEALTH\"}}, {{\"skill\": \"ERP_TASKS\"}}] }}", "time": "now", "interval_seconds": 3600}}}}
+    "Cancel BRIEFING workflows" -> {{"action": "CANCEL_WORKFLOW", "params": {{"workflow_type": "BRIEFING"}}}}
+    "Forget everything" -> {{"action": "CLEAR_MEMORY", "params": {{}}}}
+    """
+    
+    loop = asyncio.get_running_loop()
+    
+    try:
+        # Use image context if available
+        msg_payload = {'role': 'user', 'content': f"Message: {user_message}"}
+        if images:
+            msg_payload['images'] = images
+            
+        classification_response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=[
+            {'role': 'system', 'content': system_prompt},
+            msg_payload
+        ]))
+        
+        raw_json = classification_response['message']['content'].strip()
+        
+        # Robust JSON extraction
+        try:
+            # Find first { and last }
+            start_idx = raw_json.find('{')
+            end_idx = raw_json.rfind('}')
+            
+            if start_idx != -1 and end_idx != -1:
+                raw_json = raw_json[start_idx:end_idx+1]
+            else:
+                logging.warning(f"No JSON object found in response: {raw_json}")
+                # Fallback: try cleaning markdown code blocks if the simple find failed (unlikely if valid json)
+                raw_json = raw_json.replace("```json", "").replace("```", "").strip()
+                
+            intent = json.loads(raw_json)
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON Parse Error: {e}")
+            logging.error(f"Raw Response: {classification_response['message']['content']}")
+            await update.message.reply_text("⚠️ Brain freeze! I couldn't parse my own thoughts. Please try again.")
+            return
+        
+        logging.info(f"Intent detected: {intent}")
+        
+        action = intent.get("action")
+        params = intent.get("params", {})
+        
+        # If the LLM generates params as a string by mistake, try to parse it or wrap it
+        raw_params_str = None
+        if isinstance(params, str):
+            raw_params_str = params
+            try:
+                params = json.loads(params)
+            except json.JSONDecodeError:
+                logging.warning(f"Extracted params is a string but not valid JSON: {params}")
+                if "=" in params:
+                    k, v = params.split("=", 1)
+                    params = {k.strip(): v.strip()}
+                else:
+                    params = {}
+                    
+        if not isinstance(params, dict):
+            params = {}
+        
+        # --- EXECUTE ACTION ---
+        response_text = ""
+        
+        if action == "CLEAR_MEMORY":
+            database.clear_chat_history()
+            await update.message.reply_text("🧹 Memory cleared! I have forgotten our previous conversation.")
+
+        elif action == "DASHBOARD":
+            await update.message.reply_text("🌐 *Web Dashboard*: http://<YOUR_IP>:8000/dashboard", parse_mode='Markdown')
+
+        elif action in registry.TOOLS:
+            # Execute registered skill
+            tool_def = registry.TOOLS[action]
+            func = tool_def["func"]
+            
+            # Prepare params
+            call_kwargs = {}
+            
+            # Introspection
+            import inspect
+            import functools
+            sig = inspect.signature(func)
+            
+            # Autowire system arguments if requested by the skill
+            if 'chat_id' in sig.parameters:
+                call_kwargs['chat_id'] = str(chat_id)
+            if 'update' in sig.parameters:
+                call_kwargs['update'] = update
+            if 'context' in sig.parameters:
+                call_kwargs['context'] = context
+
+            # Map LLM params
+            for p in tool_def["params"]:
+                if p in params:
+                    call_kwargs[p] = params[p]
+            
+            # Absolute fallback: if no params were mapped but we had a raw string, and the tool expects a param
+            if not any(p in params for p in tool_def["params"]) and raw_params_str and tool_def["params"]:
+                # Just inject the raw string into the first expected parameter
+                first_param = tool_def["params"][0]
+                call_kwargs[first_param] = raw_params_str
+                logging.warning(f"Fallback: mapping raw string to {first_param}")
+
+            logging.info(f"Executing Skill: {action}")
+            await update.message.reply_text(f"⚡ Executing {action}...", disable_notification=True)
+
+            try:
+                if inspect.iscoroutinefunction(func):
+                    response_text = await func(**call_kwargs)
+                else:
+                    response_text = await loop.run_in_executor(None, functools.partial(func, **call_kwargs))
+                
+                # Chunking
+                response_text = str(response_text)
+                if response_text:
+                    chunk_size = 4000
+                    for i in range(0, len(response_text), chunk_size):
+                        chunk = response_text[i:i + chunk_size]
+                        try:
+                            await update.message.reply_text(chunk, parse_mode='Markdown')
+                        except Exception:
+                            await update.message.reply_text(chunk)
+            except Exception as e:
+                logging.error(f"Skill execution failed: {e}", exc_info=True)
+                await update.message.reply_text(f"⚠️ Skill Error: {e}")
+
+        else: # CHAT or fallback
+            # Normal chat logic with memory
+             # Save User Context
+            database.add_chat_message('user', user_message)
+            
+            # Fetch history
+            history = database.get_recent_chat_history(limit=10)
+            messages_payload = []
+            messages_payload.append({
+                'role': 'system', 
+                'content': f"You are {agent_name}. {persona}\nCurrent time: {current_time}"
+            })
+            for role, content in history:
+                messages_payload.append({'role': role, 'content': content})
+            
+            # Current message
+            curr_payload = {'role': 'user', 'content': user_message}
+            if images:
+                curr_payload['images'] = images
+            messages_payload.append(curr_payload)
+            
+            await context.bot.send_chat_action(chat_id=chat_id, action='typing')
+            
+            response = await loop.run_in_executor(None, lambda: ollama.chat(model=model, messages=messages_payload))
+            bot_reply = response['message']['content']
+            
+            try:
+                await update.message.reply_text(bot_reply, parse_mode='Markdown')
+            except Exception:
+                await update.message.reply_text(bot_reply)
+                
+            database.add_chat_message('assistant', bot_reply)
+
+    except Exception as e:
+        logging.error(f"Error in handle_message: {e}")
+        await update.message.reply_text(f"⚠️ Error processing request: {e}")
+
+
+import threading
+import uvicorn
+from web.server import app as web_app
+
+def start_web_server():
+    """Starts the FastAPI web server."""
+    logging.info("Starting Web Interface on http://0.0.0.0:8000")
+    uvicorn.run(web_app, host="0.0.0.0", port=8000, log_level="info", access_log=False)
+
+async def post_init(application: Application):
+    """
+    Post-initialization hook.
+    Using this to start the web server thread.
+    """
+    # Start Web Server in a separate thread
+    web_thread = threading.Thread(target=start_web_server, daemon=True)
+    web_thread.start()
+    
+    # Set bot commands
+    await application.bot.set_my_commands([
+        ("start", "Start the bot"),
+        ("help", "Show help message"),
+        ("notes", "Show your notes"),
+        ("reminders", "Show your reminders"),
+        ("status", "Check system status"),
+        ("dashboard", "Get link to Web Dashboard"),
+        ("workflows", "List active system workflows"),
+        ("check_email", "Force an immediate email check")
+    ])
+
+async def force_email_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Manually trigger email check."""
+    await update.message.reply_text("📧 Checking emails now...")
+    await check_email_job(context)
+    await update.message.reply_text("✅ Check complete.")
+
+async def check_email_job(context: ContextTypes.DEFAULT_TYPE):
+    """Background job to check unread emails."""
+    try:
+        # Lazy import to avoid circular dependency issues at top level
+        from skills import email_ops
+        
+        conf = config.load_config()
+        chat_id = conf['telegram'].get('chat_id')
+        
+        if not chat_id:
+            return
+
+        # Fetch emails (synchronous call inside async wrapper if needed, but imap is fast enough or use executor)
+        import asyncio
+        loop = asyncio.get_running_loop()
+        summary = await loop.run_in_executor(None, email_ops.check_emails)
+
+        if "📭" in summary:
+             logging.info(f"Email Job: Check complete. {summary}")
+        elif "⚠️" in summary:
+             logging.warning(f"Email check issue: {summary}")
+        else:
+             # If it's not empty/warning/no-emails, it must be actual emails
+             logging.info(f"Email Job: Found unread emails. Notification sent.")
+             await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode='Markdown')
+
+    except Exception as e:
+        logging.error(f"Error in check_email_job: {e}")
+
+def main():
+    """Start the bot."""
+    database.init_db()
+    
+    conf = config.load_config()
+    if not conf:
+        logging.error("Config not found. Exiting.")
+        return
+
+    bot_token = conf['telegram'].get('bot_token')
+    
+    if not bot_token or bot_token == "YOUR_BOT_TOKEN_HERE":
+        logging.error("Bot token not set in config.yaml")
+        return
+
+    application = ApplicationBuilder().token(bot_token)\
+        .connect_timeout(30.0).read_timeout(30.0).write_timeout(30.0)\
+        .post_init(post_init).build()
+    
+    # Handlers - WRAPPED WITH AUTH DECORATOR
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('help', help_command))
+    application.add_handler(CommandHandler('note', authorized_only(notes.handle_note_command)))
+    application.add_handler(CommandHandler('notes', authorized_only(notes.handle_notes_command)))
+    application.add_handler(CommandHandler('reminders', authorized_only(reminders.handle_reminders_command)))
+    application.add_handler(CommandHandler('status', authorized_only(system_health.handle_status_command)))
+    application.add_handler(CommandHandler('dashboard', dashboard_command))
+    application.add_handler(CommandHandler('workflows', workflows_command))
+    application.add_handler(CommandHandler('check_email', force_email_check))
+    
+    application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & (~filters.COMMAND), handle_message))
+
+    # --- JOB QUEUE SETUP ---
+    job_queue = application.job_queue
+    
+    # Website Monitoring Job
+    interval = conf['monitoring'].get('check_interval_seconds', 10800)
+    job_queue.run_repeating(web_monitor.check_websites_job, interval=interval, first=10)
+    
+    # Server Health Job (Every 10 mins)
+    job_queue.run_repeating(system_health.check_server_health_job, interval=600, first=30)
+    
+    # Reminder Check Job (Every 30 seconds)
+    job_queue.run_repeating(reminders.check_reminders_job, interval=30, first=5)
+    
+    # Workflow Check Job (Every 1 minute)
+    job_queue.run_repeating(workflows.check_workflows_job, interval=60, first=5)
+
+    # Email Check Job
+    email_interval = conf.get('email', {}).get('check_interval_seconds', 1800)
+    job_queue.run_repeating(check_email_job, interval=email_interval, first=20)
+
+    # Content Research Job (Every 4 hours = 14400 seconds)
+    # Check if we should run it less frequently? Daily is fine, but checking every 4 hours if a daily post is due is safer.
+    job_queue.run_repeating(content_researcher.research_content_job, interval=14400, first=60)
+
+    logging.info(f"Jobs scheduled: Monitoring({interval}s), Health(600s), Reminders(30s), Workflows(60s), Email({email_interval}s), ContentResearch(4h)")
+    
+    logging.info("AI Assistant (Modularized) started! Press Ctrl+C to stop.")
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
