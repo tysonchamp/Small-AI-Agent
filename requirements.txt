@@ -29,3 +29,5 @@ pytz
 ddgs
 youtube-transcript-api
 python-dateutil
+playwright
+html2text
