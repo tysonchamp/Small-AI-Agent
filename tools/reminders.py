@@ -59,6 +59,15 @@ def add_reminder(content: str, time: str, interval_seconds: int = 0, target_user
             reply_dt = dt_utc.astimezone(user_tz)
             formatted_time = reply_dt.strftime('%Y-%m-%d %H:%M:%S %Z')
             
+            # Sync to semantic memory
+            try:
+                from core.memory_sync import sync_to_memory
+                sync_to_memory("reminder", f"{content} — scheduled for {formatted_time}", {
+                    "remind_at": formatted_time,
+                })
+            except Exception as e:
+                logging.warning(f"Memory sync failed for reminder: {e}")
+            
             resp = f"✅ Reminder set: '{content}' at {formatted_time}"
             if target_user:
                 resp += f" for {target_user}"

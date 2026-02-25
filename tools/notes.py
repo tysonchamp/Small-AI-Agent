@@ -11,6 +11,14 @@ def add_note(content: str) -> str:
     """Save a note to the database. Use this when the user wants to write down or save something. Args: content — the note text."""
     try:
         database.add_note(content)
+        
+        # Sync to semantic memory
+        try:
+            from core.memory_sync import sync_to_memory
+            sync_to_memory("note", content)
+        except Exception as e:
+            logging.warning(f"Memory sync failed for note: {e}")
+        
         return "✅ Note saved."
     except Exception as e:
         logging.error(f"Error adding note: {e}")

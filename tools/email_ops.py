@@ -169,6 +169,18 @@ Emails:
                     
                     response = llm.invoke(prompt)
                     all_summaries += f"\n📧 *{account_name}* ({len(emails_data)} new):\n{response.content}\n"
+                    
+                    # Sync each email to semantic memory
+                    try:
+                        from core.memory_sync import sync_to_memory
+                        for ed in emails_data:
+                            sync_to_memory("email", f"Email from {ed['from']}: {ed['subject']} — {ed['body'][:200]}", {
+                                "subject": ed['subject'],
+                                "sender": ed['from'],
+                                "account": account_name,
+                            })
+                    except Exception:
+                        pass
                 
                 mail.logout()
             except Exception as e:

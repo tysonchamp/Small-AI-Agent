@@ -323,6 +323,13 @@ async def check_websites_job(context):
                         database.upsert_website(url, content_hash, markdown_content,
                                                status_code=status_code, last_summary=summary)
                         changes.append((url, summary))
+                        
+                        # Sync to semantic memory
+                        try:
+                            from core.memory_sync import sync_to_memory
+                            sync_to_memory("website_change", f"Website {url} changed: {summary}", {"url": url})
+                        except Exception:
+                            pass
                     else:
                         database.upsert_website(url, content_hash, markdown_content, status_code=status_code)
                 else:

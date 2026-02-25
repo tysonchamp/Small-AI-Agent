@@ -27,6 +27,7 @@ def get_all_tools():
     from tools.content_researcher import add_content_client, list_pending_content, approve_content
     from tools.seo_expert import seo_analysis
     from tools.meta_coder import create_new_tool
+    from tools.memory_search import search_memory
 
     all_tools = [
         # Notes
@@ -53,6 +54,8 @@ def get_all_tools():
         seo_analysis,
         # Meta Coder
         create_new_tool,
+        # Memory
+        search_memory,
     ]
     
     logging.info(f"Loaded {len(all_tools)} tools: {[t.name for t in all_tools]}")
