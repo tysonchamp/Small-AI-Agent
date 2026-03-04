@@ -189,8 +189,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(result)
         return
     
-    # Show typing indicator
-    await context.bot.send_chat_action(chat_id=chat_id, action='typing')
+    # Show typing indicator (non-critical, don't crash on timeout)
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action='typing')
+    except Exception:
+        logging.warning("Typing indicator failed (timeout), continuing...")
     
     try:
         # Handle image messages with Gemini
@@ -233,6 +236,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⚠️ Error: {str(e)[:200]}")
 
 
+async def error_handler(update, context):
+    """Global error handler — logs errors instead of crashing."""
+    logging.error(f"Unhandled exception: {context.error}", exc_info=context.error)
+
+
 def setup_bot():
     """Creates and configures the Telegram bot application."""
     conf = app_config.load_config()
@@ -243,7 +251,8 @@ def setup_bot():
         return None
     
     application = ApplicationBuilder().token(bot_token)\
-        .connect_timeout(30.0).read_timeout(30.0).write_timeout(30.0)\
+        .connect_timeout(60.0).read_timeout(30.0).write_timeout(30.0)\
+        .pool_timeout(60.0)\
         .post_init(post_init).build()
     
     # Command Handlers
@@ -257,6 +266,9 @@ def setup_bot():
     application.add_handler(CommandHandler('workflows', workflows_command))
     application.add_handler(CommandHandler('check_email', emails_command))
     
+    # Global Error Handler
+    application.add_error_handler(error_handler)
+
     # Message Handler (text + photo)
     application.add_handler(
         MessageHandler((filters.TEXT | filters.PHOTO) & (~filters.COMMAND), handle_message)

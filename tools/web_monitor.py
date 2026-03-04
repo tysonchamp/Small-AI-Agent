@@ -223,6 +223,46 @@ def list_websites() -> str:
 
 
 @tool
+def get_website_changes(url: str) -> str:
+    """Get the last detected changes for a monitored website. Use this when someone asks about recent changes, updates, or modifications to a website.
+    Args: url — the website URL or domain name (e.g. 'gbyteinfotech.com' or 'gbyteinfotech')."""
+    try:
+        from core.memory_sync import search_memory as mem_search
+        
+        # Search ChromaDB for website changes related to this URL
+        search_query = f"website changes {url}"
+        results = mem_search(search_query, category="website_change", k=5)
+        
+        if not results:
+            return f"🔍 No change history found in memory for `{url}`."
+        
+        # Filter results that actually match the requested URL
+        clean_url = url.strip().replace('https://', '').replace('http://', '').rstrip('/').lower()
+        matched = [r for r in results if clean_url in r.get('content', '').lower() or clean_url in r.get('url', '').lower()]
+        
+        if not matched:
+            return f"🔍 No change history found in memory for `{url}`."
+        
+        msg = f"🌐 *Website Changes for `{url}`:*\n\n"
+        for i, r in enumerate(matched, 1):
+            content = r.get('content', '')
+            # Remove the [CATEGORY] prefix for display
+            if content.startswith('['):
+                content = content.split('] ', 1)[-1] if '] ' in content else content
+            
+            timestamp = r.get('timestamp', 'Unknown')
+            score = r.get('score', 0)
+            
+            msg += f"📝 *{i}.* {content}\n"
+            msg += f"   _({timestamp} | relevance: {score})_\n\n"
+        
+        return msg.strip()
+    except Exception as e:
+        logging.error(f"Error getting website changes: {e}")
+        return f"⚠️ Failed to get website changes: {e}"
+
+
+@tool
 def add_website(url: str) -> str:
     """Add a new website to monitoring. Args: url — the website URL to monitor."""
     try:

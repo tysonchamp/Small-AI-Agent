@@ -16,7 +16,7 @@ def get_all_tools():
     """Collects and returns all LangChain tools from the tools/ package."""
     from tools.notes import add_note, list_notes
     from tools.reminders import add_reminder, cancel_reminder, query_schedule
-    from tools.web_monitor import list_websites, add_website
+    from tools.web_monitor import list_websites, add_website, get_website_changes
     from tools.web_search import web_search, summarize_content
     from tools.system_health import get_system_status, get_local_status
     from tools.system_ops import execute_shell_command
@@ -35,7 +35,7 @@ def get_all_tools():
         # Reminders
         add_reminder, cancel_reminder, query_schedule,
         # Web Monitor
-        list_websites, add_website,
+        list_websites, add_website, get_website_changes,
         # Web Search
         web_search, summarize_content,
         # System
@@ -134,6 +134,8 @@ Rules:
 - For add_note, put the note content in the "content" param.
 - For add_reminder, extract "content" and "time" params.
 - For web_search, put the query in the "query" param.
+- For questions about website changes, updates, or modifications, use get_website_changes with the domain in the "url" param.
+- For searching past events, notes, or history, use search_memory with the "query" param.
 - ONLY output the JSON object, nothing else."""
 
             try:

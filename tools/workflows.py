@@ -22,14 +22,76 @@ WORKFLOW_TYPES = {
 }
 
 
+import re
+
+# Recurrence patterns: maps keywords in time string → interval in seconds
+_RECURRENCE_PATTERNS = [
+    (r'\bevery\s+day\b', 86400),
+    (r'\bdaily\b', 86400),
+    (r'\bevery\s+hour\b', 3600),
+    (r'\bhourly\b', 3600),
+    (r'\bevery\s+week\b', 604800),
+    (r'\bweekly\b', 604800),
+    (r'\bevery\s+(\d+)\s*min(?:ute)?s?\b', None),       # captured multiplier
+    (r'\bevery\s+(\d+)\s*hours?\b', None),               # captured multiplier
+]
+
+def _detect_recurrence(time_str):
+    """Detects recurrence keywords in the time string.
+    Returns (cleaned_time_str, interval_seconds).
+    """
+    lower = time_str.lower()
+
+    # Fixed patterns
+    for pattern, interval in _RECURRENCE_PATTERNS:
+        if interval is not None:
+            m = re.search(pattern, lower)
+            if m:
+                cleaned = re.sub(pattern, '', lower).strip()
+                cleaned = re.sub(r'^(at\s+)', '', cleaned).strip()
+                return cleaned if cleaned else 'now', interval
+
+    # "every N minutes"
+    m = re.search(r'\bevery\s+(\d+)\s*min(?:ute)?s?\b', lower)
+    if m:
+        interval = int(m.group(1)) * 60
+        cleaned = re.sub(r'\bevery\s+\d+\s*min(?:ute)?s?\b', '', lower).strip()
+        cleaned = re.sub(r'^(at\s+)', '', cleaned).strip()
+        return cleaned if cleaned else 'now', interval
+
+    # "every N hours"
+    m = re.search(r'\bevery\s+(\d+)\s*hours?\b', lower)
+    if m:
+        interval = int(m.group(1)) * 3600
+        cleaned = re.sub(r'\bevery\s+\d+\s*hours?\b', '', lower).strip()
+        cleaned = re.sub(r'^(at\s+)', '', cleaned).strip()
+        return cleaned if cleaned else 'now', interval
+
+    return time_str, 0
+
+
+def _format_interval(seconds):
+    """Returns human-readable interval string."""
+    if seconds >= 86400 and seconds % 86400 == 0:
+        d = seconds // 86400
+        return f"{d} day{'s' if d > 1 else ''}"
+    elif seconds >= 3600 and seconds % 3600 == 0:
+        h = seconds // 3600
+        return f"{h} hour{'s' if h > 1 else ''}"
+    elif seconds >= 60 and seconds % 60 == 0:
+        m = seconds // 60
+        return f"{m} minute{'s' if m > 1 else ''}"
+    return f"{seconds}s"
+
+
 @tool
 def schedule_workflow(type: str, params: str = "{}", time: str = "now", interval_seconds: int = 0) -> str:
     """Schedule an automated workflow. Use this when the user wants to set up recurring or scheduled tasks.
     Args:
         type: Workflow type — BRIEFING, SYSTEM_HEALTH_REPORT, ERP_TASKS_REPORT, ERP_INVOICES_REPORT, NOTIFY_USER, COMPOSITE_REPORT.
         params: JSON string of workflow parameters. For NOTIFY_USER: {"target_user": "name", "skill_name": "SKILL"}. For COMPOSITE_REPORT: {"target_user": "name", "steps": [{"skill": "SKILL_NAME"}]}.
-        time: When to run — 'now', or natural language like 'tomorrow at 9am', 'every day at 8am'.
-        interval_seconds: Repeat interval. 0 = run once. 3600 = every hour. 86400 = every day."""
+        time: When to run — 'now', or natural language like '10am', 'tomorrow at 9am', 'every day at 8am'. If 'every day/hour/week' is included, recurrence is auto-detected.
+        interval_seconds: Repeat interval in seconds. 0 = run once. 3600 = every hour. 86400 = every day. IMPORTANT: For 'every day at Xam' set this to 86400. Auto-detected from time if not provided."""
     try:
         conf = app_config.load_config()
         tz_str = conf['telegram'].get('timezone', 'Asia/Kolkata')
@@ -48,10 +110,17 @@ def schedule_workflow(type: str, params: str = "{}", time: str = "now", interval
         else:
             params_dict = params if isinstance(params, dict) else {}
         
+        # Auto-detect recurrence from time string
+        detected_time, detected_interval = _detect_recurrence(time)
+        if detected_interval > 0 and interval_seconds == 0:
+            interval_seconds = detected_interval
+            time = detected_time
+            logging.info(f"Auto-detected recurrence: every {_format_interval(interval_seconds)}, time='{time}'")
+        
         # Parse time
         now_user = datetime.now(user_tz)
         
-        if time.lower() == "now":
+        if time.lower().strip() in ("now", ""):
             dt_utc = datetime.utcnow()
         else:
             settings = {
@@ -77,7 +146,7 @@ def schedule_workflow(type: str, params: str = "{}", time: str = "now", interval
         
         msg = f"✅ Workflow scheduled!\n• Type: *{type}*\n• First run: {formatted_time}"
         if interval_seconds > 0:
-            msg += f"\n• Repeats every {interval_seconds}s"
+            msg += f"\n• Repeats every {_format_interval(interval_seconds)}"
         msg += f"\n• ID: #{wf_id}"
         
         return msg
@@ -115,7 +184,7 @@ def list_workflows() -> str:
             msg += f"#{w_id} *{w_type}*\n"
             msg += f"  Next: {time_str}"
             if interval > 0:
-                msg += f" | Every {interval}s"
+                msg += f" | Every {_format_interval(interval)}"
             msg += "\n"
         
         return msg

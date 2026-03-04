@@ -402,6 +402,18 @@ def upsert_website(url, content_hash, content, status_code=200, last_error=None,
     conn.commit()
     conn.close()
 
+def get_website_changes(url_query):
+    """Find a website by partial URL match and return its last change info."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(
+        "SELECT url, last_checked, last_error, status_code, last_summary FROM websites WHERE url LIKE ?",
+        (f"%{url_query}%",)
+    )
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
 def get_all_websites():
     conn = get_connection()
     c = conn.cursor()
