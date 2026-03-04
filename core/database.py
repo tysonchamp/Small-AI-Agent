@@ -87,6 +87,12 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     
+    # --- Job Run Tracking ---
+    c.execute('''CREATE TABLE IF NOT EXISTS job_runs (
+        job_name TEXT PRIMARY KEY,
+        last_run TIMESTAMP
+    )''')
+    
     # Migration: add status column if missing
     try:
         c.execute("ALTER TABLE workflows ADD COLUMN status TEXT DEFAULT 'active'")
@@ -97,6 +103,35 @@ def init_db():
     conn.commit()
     conn.close()
     logging.info("Database initialized.")
+
+
+# --- Job Run Tracking Functions ---
+def record_job_run(job_name):
+    """Record that a job just ran. Creates or updates the timestamp."""
+    conn = get_connection()
+    c = conn.cursor()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    c.execute("""INSERT INTO job_runs (job_name, last_run) VALUES (?, ?)
+                 ON CONFLICT(job_name) DO UPDATE SET last_run = ?""",
+              (job_name, now, now))
+    conn.commit()
+    conn.close()
+
+def get_last_job_run(job_name):
+    """Returns seconds since the job last ran, or None if never ran."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT last_run FROM job_runs WHERE job_name = ?", (job_name,))
+    row = c.fetchone()
+    conn.close()
+    if not row or not row[0]:
+        return None
+    try:
+        last_dt = datetime.strptime(row[0], '%Y-%m-%d %H:%M:%S')
+        elapsed = (datetime.now() - last_dt).total_seconds()
+        return max(0, elapsed)
+    except Exception:
+        return None
 
 
 # --- Note Functions ---

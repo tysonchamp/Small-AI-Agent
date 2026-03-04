@@ -6,10 +6,15 @@ import hashlib
 import logging
 import html2text
 import requests
+import threading
 from langchain_core.tools import tool
 from core import database
 import config as app_config
 import yaml
+
+
+# Lock to prevent uptime and content checks from running simultaneously
+_monitor_lock = threading.Lock()
 
 
 # --- Html2Text converter (reusable) ---
@@ -146,20 +151,30 @@ def fetch_with_requests(url, timeout=30):
 
 def get_website_content(url):
     """
-    Fetch website content. Uses Playwright for full JS rendering.
-    Falls back to requests if Playwright fails.
+    Fetch website content. Uses requests first (fast).
+    Falls back to Playwright only if requests fails (for JS-heavy sites).
     """
-    # Try Playwright first (handles JS-heavy sites)
+    # Try requests first (fast — 2-5s per site)
     try:
-        html, status, error = fetch_with_playwright(url)
+        html, status, error = fetch_with_requests(url, timeout=15)
+        if not error and html and len(html.strip()) > 500:
+            return html, status, None
+        if error:
+            logging.debug(f"Requests failed for {url}: {error}, trying Playwright")
+    except Exception as e:
+        logging.debug(f"Requests error for {url}: {e}, trying Playwright")
+    
+    # Fallback to Playwright (JS-heavy sites, or requests returned minimal content)
+    try:
+        html, status, error = fetch_with_playwright(url, timeout=15000)
         if not error:
             return html, status, None
-        logging.warning(f"Playwright failed for {url}: {error}, trying requests fallback")
+        logging.warning(f"Playwright also failed for {url}: {error}")
     except Exception as e:
-        logging.warning(f"Playwright error for {url}: {e}, trying requests fallback")
+        logging.warning(f"Playwright error for {url}: {e}")
     
-    # Fallback to simple requests
-    return fetch_with_requests(url)
+    # Both failed — return the requests result (even if partial)
+    return fetch_with_requests(url, timeout=15)
 
 
 def analyze_changes_with_llm(old_markdown, new_markdown):
@@ -294,12 +309,10 @@ def add_website(url: str) -> str:
 async def check_websites_job(context):
     """Background job to check all websites for changes.
     
-    Two-phase approach for speed without GPU pressure:
-    Phase 1: Fetch ALL sites via Playwright (parallel with shared browser, CPU only)
-    Phase 2: Run LLM analysis only on changed sites (sequential, rare GPU usage)
+    Phase 1: Sequential fetch — acquires/releases lock per site so uptime can interleave.
+    Phase 2: LLM analysis + notifications — fully unlocked, no network I/O.
     """
     import asyncio
-    from concurrent.futures import ThreadPoolExecutor, as_completed
     
     conf = app_config.load_config()
     chat_id = conf['telegram'].get('chat_id')
@@ -308,54 +321,53 @@ async def check_websites_job(context):
     if not sites or not chat_id:
         return
     
-    logging.info(f"Website check starting for {len(sites)} sites")
-    
     loop = asyncio.get_running_loop()
     
-    def _fetch_all_sites():
-        """Phase 1: Fetch all sites in parallel (CPU only, no GPU)."""
-        results = {}
-        
-        # Use ThreadPoolExecutor with 5 workers (Chromium is heavier than requests)
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            future_to_url = {executor.submit(get_website_content, url): url for url in sites}
-            for future in as_completed(future_to_url):
-                url = future_to_url[future]
-                try:
-                    results[url] = future.result()
-                except Exception as e:
-                    results[url] = (None, 0, str(e))
-        
-        return results
+    # === Phase 1: Fetch all sites (lock per site, not per phase) ===
+    logging.info(f"Content check Phase 1 starting: fetching {len(sites)} sites")
     
-    def _process_results(fetch_results):
-        """Phase 2: Convert to markdown, compare hashes, LLM only on changed (sequential)."""
+    def _fetch_all_sites():
+        """Fetch all sites sequentially, locking per site."""
+        fetch_results = {}
+        for i, url in enumerate(sites, 1):
+            try:
+                _monitor_lock.acquire()
+                try:
+                    logging.debug(f"Content fetch [{i}/{len(sites)}]: {url}")
+                    fetch_results[url] = get_website_content(url)
+                finally:
+                    _monitor_lock.release()
+            except Exception as e:
+                fetch_results[url] = (None, 0, str(e))
+        return fetch_results
+    
+    fetch_results = await loop.run_in_executor(None, _fetch_all_sites)
+    logging.info(f"Content check Phase 1 complete: fetched {len(fetch_results)} sites")
+    
+    # === Phase 2: Process results + LLM analysis (UNLOCKED — no network I/O) ===
+    def _process_results():
+        """Compare hashes, run LLM on changed sites."""
         changes = []
-        
         for url, (html_content, status_code, error) in fetch_results.items():
             try:
                 if error:
                     database.upsert_website(url, None, None, status_code=0, last_error=error)
                     continue
-                
                 if status_code >= 400:
                     database.upsert_website(url, None, None, status_code=status_code, last_error=f"HTTP {status_code}")
                     continue
                 
-                # Convert HTML to Markdown for cleaner comparison
                 markdown_content = html_to_markdown(html_content)
                 content_hash = get_content_hash(markdown_content)
                 existing = database.get_website(url)
                 
                 if existing and existing[1] == content_hash:
-                    # No change — quick update, no GPU needed
                     database.upsert_website(url, content_hash, markdown_content, status_code=status_code)
                     continue
                 
                 old_content = existing[2] if existing else None
                 
                 if old_content:
-                    # Content changed — LLM analysis (GPU, rare)
                     logging.info(f"Content changed for {url}, running LLM analysis...")
                     summary = analyze_changes_with_llm(old_content, markdown_content)
                     
@@ -363,8 +375,6 @@ async def check_websites_job(context):
                         database.upsert_website(url, content_hash, markdown_content,
                                                status_code=status_code, last_summary=summary)
                         changes.append((url, summary))
-                        
-                        # Sync to semantic memory
                         try:
                             from core.memory_sync import sync_to_memory
                             sync_to_memory("website_change", f"Website {url} changed: {summary}", {"url": url})
@@ -373,32 +383,19 @@ async def check_websites_job(context):
                     else:
                         database.upsert_website(url, content_hash, markdown_content, status_code=status_code)
                 else:
-                    # First check — just store, no GPU needed
                     database.upsert_website(url, content_hash, markdown_content, status_code=status_code)
                     logging.info(f"First check stored for {url}")
-            
             except Exception as e:
                 logging.error(f"Error processing {url}: {e}")
                 try:
                     database.upsert_website(url, None, None, status_code=0, last_error=str(e))
                 except Exception:
                     pass
-        
         return changes
     
-    def _run_full_check():
-        """Run both phases in a background thread."""
-        fetch_results = _fetch_all_sites()
-        logging.info(f"Phase 1 complete: fetched {len(fetch_results)} sites")
-        changes = _process_results(fetch_results)
-        return changes
+    changes = await loop.run_in_executor(None, _process_results)
     
-    # Run in thread so it doesn't block the event loop
-    changes = await loop.run_in_executor(None, _run_full_check)
-    
-    # Send notifications (async, in event loop)
     for url, summary in changes:
-        # Truncate summary to fit Telegram's 4096 char limit
         header = f"🔔 *Website Changed!*\n\n🌐 `{url}`\n\n"
         max_summary_len = 4000 - len(header)
         if len(summary) > max_summary_len:
@@ -412,4 +409,121 @@ async def check_websites_job(context):
             except Exception as e:
                 logging.error(f"Failed to send notification for {url}: {e}")
     
-    logging.info("Website check complete.")
+    logging.info("Website content check complete.")
+    database.record_job_run('content_check')
+
+
+# --- Uptime Check Background Job ---
+async def check_uptime_job(context):
+    """Lightweight background job to check if websites are up or down.
+    
+    Sequential HTTP HEAD requests to avoid firewall blocks.
+    Uses lock to prevent overlap with content check.
+    Alerts on state changes: OK → Down, Down → Recovered.
+    """
+    import asyncio
+    
+    logging.info("Uptime check waiting for lock...")
+    _monitor_lock.acquire()
+    
+    try:
+        conf = app_config.load_config()
+        chat_id = conf['telegram'].get('chat_id')
+        sites = conf.get('monitoring', {}).get('websites', [])
+        
+        if not sites or not chat_id:
+            return
+        
+        logging.info(f"Uptime check starting for {len(sites)} sites")
+        
+        loop = asyncio.get_running_loop()
+        
+        def _check_single_site(url):
+            """Quick HTTP check — returns (url, is_up, status_code, error_msg)."""
+            try:
+                headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+                # Use GET with stream=True (many servers return 404 for HEAD)
+                response = requests.get(url, headers=headers, timeout=15, allow_redirects=True, stream=True)
+                response.close()  # Don't download body
+                if response.status_code >= 400:
+                    return (url, False, response.status_code, f"HTTP {response.status_code}")
+                return (url, True, response.status_code, None)
+            except requests.exceptions.Timeout:
+                return (url, False, 0, "Connection timed out")
+            except requests.exceptions.ConnectionError:
+                return (url, False, 0, "Connection refused")
+            except requests.exceptions.SSLError:
+                return (url, False, 0, "SSL certificate error")
+            except Exception as e:
+                return (url, False, 0, str(e)[:200])
+        
+        def _check_all_sites_sequential():
+            """Check all sites one by one."""
+            results = []
+            for i, url in enumerate(sites, 1):
+                logging.debug(f"Uptime check [{i}/{len(sites)}]: {url}")
+                results.append(_check_single_site(url))
+            return results
+        
+        results = await loop.run_in_executor(None, _check_all_sites_sequential)
+        
+        # Compare with previous state and detect transitions
+        down_alerts = []
+        recovered_alerts = []
+        
+        for url, is_up, status_code, error_msg in results:
+            existing = database.get_website(url)
+            prev_data = database.get_website_changes(url)
+            was_down = False
+            if prev_data:
+                was_down = bool(prev_data[0][2])  # last_error was not None/empty
+            
+            if is_up:
+                if was_down:
+                    recovered_alerts.append(f"✅ `{url}` — *Recovered* (HTTP {status_code})")
+                database.upsert_website(
+                    url, 
+                    existing[1] if existing else None,
+                    existing[2] if existing else None,
+                    status_code=status_code, 
+                    last_error=None
+                )
+            else:
+                database.upsert_website(
+                    url, 
+                    existing[1] if existing else None,
+                    existing[2] if existing else None,
+                    status_code=status_code, 
+                    last_error=error_msg
+                )
+                if not was_down:
+                    down_alerts.append(f"❌ `{url}` — {error_msg}")
+                else:
+                    logging.debug(f"Still down: {url} — {error_msg}")
+        
+        # Send alerts
+        if down_alerts:
+            alert_msg = "🚨 *Website Down Alert!*\n\n" + "\n".join(down_alerts)
+            try:
+                await context.bot.send_message(chat_id=chat_id, text=alert_msg, parse_mode='Markdown')
+            except Exception:
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=alert_msg)
+                except Exception as e:
+                    logging.error(f"Failed to send downtime alert: {e}")
+        
+        if recovered_alerts:
+            recovery_msg = "🎉 *Website Recovered!*\n\n" + "\n".join(recovered_alerts)
+            try:
+                await context.bot.send_message(chat_id=chat_id, text=recovery_msg, parse_mode='Markdown')
+            except Exception:
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=recovery_msg)
+                except Exception as e:
+                    logging.error(f"Failed to send recovery alert: {e}")
+        
+        down_count = sum(1 for _, is_up, _, _ in results if not is_up)
+        logging.info(f"Uptime check complete: {len(results)} sites checked, {down_count} down")
+        database.record_job_run('uptime_check')
+    finally:
+        _monitor_lock.release()

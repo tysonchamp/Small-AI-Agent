@@ -275,7 +275,7 @@ def setup_bot():
     )
     
     # --- Job Queue Setup ---
-    from tools.web_monitor import check_websites_job
+    from tools.web_monitor import check_websites_job, check_uptime_job
     from tools.system_health import check_server_health_job
     from tools.reminders import check_reminders_job
     from tools.workflows import check_workflows_job
@@ -284,9 +284,28 @@ def setup_bot():
     
     job_queue = application.job_queue
     
-    # Website Monitoring
-    interval = conf['monitoring'].get('check_interval_seconds', 3600)
-    job_queue.run_repeating(check_websites_job, interval=interval, first=10)
+    # --- Smart first-run delay (per-job tracking via job_runs table) ---
+    def _calc_first_delay(job_name, interval, default_first):
+        """Calculate first-run delay based on when the job last ran."""
+        elapsed = database.get_last_job_run(job_name)
+        if elapsed is not None and elapsed < interval:
+            delay = int(interval - elapsed)
+            logging.info(f"{job_name}: last ran {int(elapsed)}s ago, next in {delay}s")
+            return delay
+        else:
+            logging.info(f"{job_name}: overdue or first run, starting in {default_first}s")
+            return default_first
+    
+    # Website Uptime Check (lightweight, frequent)
+    uptime_interval = conf['monitoring'].get('uptime_check_interval_seconds', 600)
+    uptime_first = _calc_first_delay('uptime_check', uptime_interval, 10)
+    job_queue.run_repeating(check_uptime_job, interval=uptime_interval, first=uptime_first)
+    
+    # Website Content Change Check (heavy, less frequent)
+    content_interval = conf['monitoring'].get('content_check_interval_seconds',
+                        conf['monitoring'].get('check_interval_seconds', 3600))
+    content_first = _calc_first_delay('content_check', content_interval, 60)
+    job_queue.run_repeating(check_websites_job, interval=content_interval, first=content_first)
     
     # Server Health (Every 10 mins)
     job_queue.run_repeating(check_server_health_job, interval=600, first=30)
@@ -304,7 +323,7 @@ def setup_bot():
     # Content Research (Every 4 hours)
     job_queue.run_repeating(research_content_job, interval=14400, first=60)
     
-    logging.info(f"Jobs scheduled: Monitor({interval}s), Health(600s), Reminders(30s), Workflows(60s), Email({email_interval}s), Content(4h)")
+    logging.info(f"Jobs scheduled: Uptime({uptime_interval}s), Content({content_interval}s), Health(600s), Reminders(30s), Workflows(60s), Email({email_interval}s), Research(4h)")
     
     return application
 
