@@ -438,15 +438,31 @@ async def check_uptime_job(context):
         
         loop = asyncio.get_running_loop()
         
+        # Parking/expired domain detection keywords
+        _PARKING_INDICATORS = [
+            'parking-lander', 'LANDER_SYSTEM', '/lander',
+            'sedoparking', 'domainmarket', 'domain is for sale',
+            'buy this domain', 'domain expired', 'parked free',
+            'godaddy.com/parking', 'afternic.com',
+            'hugedomains.com', 'dan.com',
+        ]
+        
         def _check_single_site(url):
             """Quick HTTP check — returns (url, is_up, status_code, error_msg)."""
             try:
                 headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-                # Use GET with stream=True (many servers return 404 for HEAD)
-                response = requests.get(url, headers=headers, timeout=15, allow_redirects=True, stream=True)
-                response.close()  # Don't download body
+                response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+                
                 if response.status_code >= 400:
                     return (url, False, response.status_code, f"HTTP {response.status_code}")
+                
+                # Check for parking/expired domain pages
+                body = response.text[:2000].lower()
+                if len(response.text.strip()) < 500:
+                    for indicator in _PARKING_INDICATORS:
+                        if indicator.lower() in body:
+                            return (url, False, response.status_code, f"Domain parked/expired (detected: {indicator})")
+                
                 return (url, True, response.status_code, None)
             except requests.exceptions.Timeout:
                 return (url, False, 0, "Connection timed out")
