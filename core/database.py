@@ -419,7 +419,7 @@ def delete_workflow(w_id):
 def get_website(url):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT url, content_hash, last_content, last_checked FROM websites WHERE url = ?", (url,))
+    c.execute("SELECT url, content_hash, last_content, last_checked, last_error FROM websites WHERE url = ?", (url,))
     row = c.fetchone()
     conn.close()
     return row

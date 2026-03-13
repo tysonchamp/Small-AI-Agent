@@ -31,3 +31,4 @@ youtube-transcript-api
 python-dateutil
 playwright
 html2text
+python-whois

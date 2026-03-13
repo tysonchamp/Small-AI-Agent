@@ -8,6 +8,7 @@ import html2text
 import requests
 import threading
 from langchain_core.tools import tool
+import re
 from core import database
 import config as app_config
 import yaml
@@ -361,6 +362,10 @@ async def check_websites_job(context):
                 content_hash = get_content_hash(markdown_content)
                 existing = database.get_website(url)
                 
+                if existing and len(existing) > 4 and existing[4]:
+                    # Site is marked down (e.g. by uptime checker for parking/DNS). Preserve error and skip content check.
+                    continue
+                
                 if existing and existing[1] == content_hash:
                     database.upsert_website(url, content_hash, markdown_content, status_code=status_code)
                     continue
@@ -438,13 +443,26 @@ async def check_uptime_job(context):
         
         loop = asyncio.get_running_loop()
         
+        import urllib.parse
+        import re
+
+        def _get_base_domain(url_str):
+            try:
+                netloc = urllib.parse.urlparse(url_str).netloc.lower()
+                if netloc.startswith('www.'):
+                    return netloc[4:]
+                return netloc
+            except Exception:
+                return ""
+        
         # Parking/expired domain detection keywords
         _PARKING_INDICATORS = [
             'parking-lander', 'LANDER_SYSTEM', '/lander',
             'sedoparking', 'domainmarket', 'domain is for sale',
             'buy this domain', 'domain expired', 'parked free',
             'godaddy.com/parking', 'afternic.com',
-            'hugedomains.com', 'dan.com',
+            'hugedomains.com', 'dan.com', '<title>redirecting...</title>',
+            'prebid-wrapper'
         ]
         
         def _check_single_site(url):
@@ -456,18 +474,93 @@ async def check_uptime_job(context):
                 if response.status_code >= 400:
                     return (url, False, response.status_code, f"HTTP {response.status_code}")
                 
-                # Check for parking/expired domain pages
-                body = response.text[:2000].lower()
-                if len(response.text.strip()) < 500:
+                orig_domain = _get_base_domain(url)
+                
+                # 1. Check for HTTP redirects to completely different domains (hacked or expired)
+                final_domain = _get_base_domain(response.url)
+                if orig_domain and final_domain and orig_domain != final_domain:
+                    # Allow subdomains (e.g. site.com -> app.site.com) but block site.com -> hacker.com
+                    if not final_domain.endswith(f".{orig_domain}") and not orig_domain.endswith(f".{final_domain}"):
+                        return (url, False, response.status_code, f"Suspicious HTTP redirect to {final_domain}")
+                
+                body = response.text[:15000].lower()
+                
+                # 2. Check for parking/expired domain pages (these often return HTTP 200)
+                if len(response.text.strip()) < 15000:
                     for indicator in _PARKING_INDICATORS:
                         if indicator.lower() in body:
                             return (url, False, response.status_code, f"Domain parked/expired (detected: {indicator})")
                 
+                # 3. Check for HTML JS / Meta hacks that redirect the user
+                # Meta refresh (e.g. <meta http-equiv="refresh" content="0;url=http://hacker.com">)
+                meta_match = re.search(r'http-equiv=["\']?refresh["\']?.*?url=([^"\'>\s]+)', body)
+                if meta_match:
+                    meta_url = meta_match.group(1).strip()
+                    if meta_url.startswith('http'):
+                        meta_domain = _get_base_domain(meta_url)
+                        if meta_domain and meta_domain != orig_domain and not meta_domain.endswith(f".{orig_domain}"):
+                            return (url, False, response.status_code, f"Malicious meta redirect to {meta_domain}")
+                
+                # JS window.location (e.g. window.location.href="http://hacker.com")
+                js_match = re.search(r'window\.location(?:\.href|\.replace)?\s*=\s*["\'](http[^"\']+)["\']', body)
+                if js_match:
+                    js_url = js_match.group(1).strip()
+                    js_domain = _get_base_domain(js_url)
+                    if js_domain and js_domain != orig_domain and not js_domain.endswith(f".{orig_domain}"):
+                        return (url, False, response.status_code, f"Malicious JS redirect to {js_domain}")
+                
                 return (url, True, response.status_code, None)
             except requests.exceptions.Timeout:
                 return (url, False, 0, "Connection timed out")
-            except requests.exceptions.ConnectionError:
-                return (url, False, 0, "Connection refused")
+            except requests.exceptions.ConnectionError as ce:
+                # Check for DNS/NameResolution errors which often happen for expired domains
+                err_str = str(ce)
+                if "NameResolutionError" in err_str or "Failed to resolve" in err_str:
+                    try:
+                        import whois
+                        import datetime
+                        import pytz
+                        import subprocess
+                        domain_to_check = _get_base_domain(url)
+                        if domain_to_check:
+                            expired_str = None
+                            if expired_str:
+                                return (url, False, 0, expired_str)
+                                
+                            # Fallback to system whois command (handles .in TLDs better sometimes)
+                            try:
+                                import subprocess
+                                result = subprocess.run(
+                                    ['whois', domain_to_check], 
+                                    stdout=subprocess.PIPE, 
+                                    stderr=subprocess.PIPE, 
+                                    text=True, 
+                                    timeout=4
+                                )
+                                out = result.stdout.lower()
+                                if 'registry expiry date:' in out or 'expiration date:' in out:
+                                    # Try to find if the date is in the past
+                                    match = re.search(r'(registry expiry date|expiration date):\s*([^\n]+)', out)
+                                    if match:
+                                        date_str = match.group(2).strip()
+                                        from dateutil import parser
+                                        try:
+                                            parsed_date = parser.parse(date_str)
+                                            if parsed_date.tzinfo is None:
+                                                parsed_date = parsed_date.replace(tzinfo=pytz.UTC)
+                                            if parsed_date < datetime.datetime.now(pytz.UTC):
+                                                return (url, False, 0, f"Domain expired on {parsed_date.strftime('%Y-%m-%d')}")
+                                        except Exception:
+                                            # If we can't parse but we know it doesn't resolve, let it drop through to fallback error
+                                            pass
+                            except subprocess.TimeoutExpired:
+                                logging.debug(f"Subprocess WHOIS timed out for {url}")
+                            except Exception as e:
+                                logging.debug(f"Subprocess WHOIS failed for {url}: {e}")
+                    except Exception as we:
+                        logging.debug(f"WHOIS lookup failed for {url}: {we}")
+                
+                return (url, False, 0, "Connection refused / DNS failed")
             except requests.exceptions.SSLError:
                 return (url, False, 0, "SSL certificate error")
             except Exception as e:
