@@ -44,8 +44,15 @@ def perform_tavily_search(query):
 
 def perform_web_search(query):
     """Dispatches search to the configured provider (duckduckgo or tavily)."""
-    provider = os.environ.get("SEARCH_PROVIDER", "duckduckgo").lower()
+    conf = app_config.load_config()
+    provider = (conf.get("search", {}).get("provider", "duckduckgo") if conf else os.environ.get("SEARCH_PROVIDER", "duckduckgo")).lower()
+    if provider not in ("duckduckgo", "tavily"):
+        logging.warning(f'Unknown SEARCH_PROVIDER "{provider}", falling back to duckduckgo')
+        provider = "duckduckgo"
     if provider == "tavily":
+        tavily_key = conf.get("search", {}).get("tavily_api_key", "") if conf else ""
+        if tavily_key:
+            os.environ.setdefault("TAVILY_API_KEY", tavily_key)
         return perform_tavily_search(query)
     return perform_duckduckgo_search(query)
 
