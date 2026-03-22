@@ -1,24 +1,47 @@
 import logging
 import asyncio
 import io
+import os
 import re
 from telegram.ext import ContextTypes
 
 import config
 
-def perform_web_search(query):
+def _perform_tavily_search(query):
+    from tavily import TavilyClient
+    try:
+        client = TavilyClient()
+        response = client.search(query=query, max_results=5, search_depth="basic")
+        results = response.get("results", [])
+        if not results:
+            return "No results found."
+
+        summary = ""
+        for r in results:
+            summary += f"- [{r['title']}]({r['url']}): {r.get('content', '')}\n"
+        return summary
+    except Exception as e:
+        return f"Error performing search: {e}"
+
+def _perform_ddgs_search(query):
     from ddgs import DDGS
     try:
         results = DDGS().text(query, max_results=5)
         if not results:
             return "No results found."
-        
+
         summary = ""
         for r in results:
             summary += f"- [{r['title']}]({r['href']}): {r['body']}\n"
         return summary
     except Exception as e:
         return f"Error performing search: {e}"
+
+def perform_web_search(query):
+    provider = os.environ.get("SEARCH_PROVIDER", "duckduckgo").lower()
+    if provider == "tavily":
+        return _perform_tavily_search(query)
+    return _perform_ddgs_search(query)
 
 def get_youtube_video_id(url):
     # Patterns: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/embed/ID
