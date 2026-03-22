@@ -53,10 +53,15 @@ def load_config():
                     })
             
             # Default values if missing
-            
+
             # Default values if missing
             if 'ollama' not in config: config['ollama'] = {'model': 'llama3'}
-            
+
+            # Search config
+            if 'search' not in config: config['search'] = {}
+            config['search']['provider'] = os.getenv('SEARCH_PROVIDER', config['search'].get('provider', 'duckduckgo'))
+            config['search']['tavily_api_key'] = os.getenv('TAVILY_API_KEY', config['search'].get('tavily_api_key', ''))
+
             return config
     except FileNotFoundError:
         logging.error(f"Configuration file {CONFIG_FILE} not found.")

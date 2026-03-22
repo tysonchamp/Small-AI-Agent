@@ -27,6 +27,7 @@ pyyaml
 dateparser
 pytz
 ddgs
+tavily-python
 youtube-transcript-api
 python-dateutil
 playwright

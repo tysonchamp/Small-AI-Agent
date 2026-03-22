@@ -2,25 +2,59 @@
 Web Search Tool — Search the web and summarize content.
 """
 import logging
+import os
 import re
 from langchain_core.tools import tool
 import config as app_config
 
 
-def perform_web_search(query):
+def perform_duckduckgo_search(query):
     """Performs a DuckDuckGo search."""
     from ddgs import DDGS
     try:
         results = DDGS().text(query, max_results=5)
         if not results:
             return "No results found."
-        
+
         summary = ""
         for r in results:
             summary += f"- [{r['title']}]({r['href']}): {r['body']}\n"
         return summary
     except Exception as e:
         return f"Error performing search: {e}"
+
+
+def perform_tavily_search(query):
+    """Performs a Tavily search."""
+    from tavily import TavilyClient
+    try:
+        client = TavilyClient()
+        response = client.search(query=query, max_results=5)
+        results = response.get("results", [])
+        if not results:
+            return "No results found."
+
+        summary = ""
+        for r in results:
+            summary += f"- [{r['title']}]({r['url']}): {r.get('content', '')}\n"
+        return summary
+    except Exception as e:
+        return f"Error performing search: {e}"
+
+
+def perform_web_search(query):
+    """Dispatches search to the configured provider (duckduckgo or tavily)."""
+    conf = app_config.load_config()
+    provider = (conf.get("search", {}).get("provider", "duckduckgo") if conf else os.environ.get("SEARCH_PROVIDER", "duckduckgo")).lower()
+    if provider not in ("duckduckgo", "tavily"):
+        logging.warning(f'Unknown SEARCH_PROVIDER "{provider}", falling back to duckduckgo')
+        provider = "duckduckgo"
+    if provider == "tavily":
+        tavily_key = conf.get("search", {}).get("tavily_api_key", "") if conf else ""
+        if tavily_key:
+            os.environ.setdefault("TAVILY_API_KEY", tavily_key)
+        return perform_tavily_search(query)
+    return perform_duckduckgo_search(query)
 
 
 def get_youtube_video_id(url):
