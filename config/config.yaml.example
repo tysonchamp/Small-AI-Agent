@@ -40,6 +40,10 @@ email:
     #   ssl: true
     #   enabled: true
 
+search:
+  provider: "duckduckgo"  # duckduckgo or tavily
+  tavily_api_key: ""      # Required when provider is tavily
+
 servers:
   - name: "Local System"
     type: "local"
