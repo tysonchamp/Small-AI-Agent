@@ -1,24 +1,43 @@
 import logging
 import asyncio
 import io
+import os
 import re
 from telegram.ext import ContextTypes
 
 import config
 
 def perform_web_search(query):
-    from ddgs import DDGS
-    try:
-        results = DDGS().text(query, max_results=5)
-        if not results:
-            return "No results found."
-        
-        summary = ""
-        for r in results:
-            summary += f"- [{r['title']}]({r['href']}): {r['body']}\n"
-        return summary
-    except Exception as e:
-        return f"Error performing search: {e}"
+    tavily_api_key = os.environ.get("TAVILY_API_KEY")
+    if tavily_api_key:
+        try:
+            from tavily import TavilyClient
+            client = TavilyClient(api_key=tavily_api_key)
+            response = client.search(query=query, max_results=5, search_depth="basic")
+            results = response.get("results", [])
+            if not results:
+                return "No results found."
+            summary = ""
+            for r in results:
+                title = r.get("title", "No title")
+                url = r.get("url", "")
+                content = r.get("content", "")
+                summary += f"- [{title}]({url}): {content}\n"
+            return summary
+        except Exception as e:
+            return f"Error performing search with Tavily: {e}"
+    else:
+        from ddgs import DDGS
+        try:
+            results = DDGS().text(query, max_results=5)
+            if not results:
+                return "No results found."
+            summary = ""
+            for r in results:
+                summary += f"- [{r['title']}]({r['href']}): {r['body']}\n"
+            return summary
+        except Exception as e:
+            return f"Error performing search: {e}"
 
 def get_youtube_video_id(url):
     # Patterns: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/embed/ID
