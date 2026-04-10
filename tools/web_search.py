@@ -2,23 +2,44 @@
 Web Search Tool — Search the web and summarize content.
 """
 import logging
+import os
 import re
 from langchain_core.tools import tool
 import config as app_config
 
 
-def perform_web_search(query):
-    """Performs a DuckDuckGo search."""
+def _tavily_search(query):
+    """Performs a web search using Tavily."""
+    from tavily import TavilyClient
+    client = TavilyClient()
+    response = client.search(query=query, max_results=5, search_depth="basic")
+    results = response.get("results", [])
+    if not results:
+        return "No results found."
+    summary = ""
+    for r in results:
+        summary += f"- [{r['title']}]({r['url']}): {r['content']}\n"
+    return summary
+
+
+def _ddgs_search(query):
+    """Performs a web search using DuckDuckGo."""
     from ddgs import DDGS
+    results = DDGS().text(query, max_results=5)
+    if not results:
+        return "No results found."
+    summary = ""
+    for r in results:
+        summary += f"- [{r['title']}]({r['href']}): {r['body']}\n"
+    return summary
+
+
+def perform_web_search(query):
+    """Performs a web search using Tavily (if TAVILY_API_KEY is set) or DuckDuckGo."""
     try:
-        results = DDGS().text(query, max_results=5)
-        if not results:
-            return "No results found."
-        
-        summary = ""
-        for r in results:
-            summary += f"- [{r['title']}]({r['href']}): {r['body']}\n"
-        return summary
+        if os.environ.get("TAVILY_API_KEY"):
+            return _tavily_search(query)
+        return _ddgs_search(query)
     except Exception as e:
         return f"Error performing search: {e}"
 
