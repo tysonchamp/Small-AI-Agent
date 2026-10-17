@@ -21,7 +21,6 @@ async def _search(query, timeout):
             headers={"User-Agent": USER_AGENT},
             timeout=timeout,
             follow_redirects=False,
-            trust_env=False,
         ) as client:
             async with streamable_http_client(MCP_URL, http_client=client) as streams:
                 async with ClientSession(
