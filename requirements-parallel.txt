@@ -1,0 +1,4 @@
+# Optional web-search provider. The default DuckDuckGo path needs none of these.
+mcp>=1.26,<2
+httpx>=0.27,<1
+anyio>=4,<5

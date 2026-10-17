@@ -16,6 +16,11 @@ agent:
   name: "Jack"
   persona: "You are a helpful and efficient AI assistant. you are strictly professional and to the point."
 
+search:
+  provider: "duckduckgo" # Or "parallel" after installing requirements-parallel.txt
+  enabled: true # false prevents web searches, including environment overrides
+  timeout_seconds: 30 # Parallel MCP deadline, above 0 and at most 120 seconds
+
 ollama:
   model: "gemma3:latest"
   host: "http://localhost:11434"
