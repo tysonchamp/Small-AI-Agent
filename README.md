@@ -101,6 +101,39 @@ nano config/config.yaml
 | `ollama.host` | Ollama server URL |
 | `GBYTE_ERP_URL` | ERP API base URL |
 
+### Optional Parallel web search
+
+The `web_search` tool uses DuckDuckGo by default. To use free web search with
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp), install
+the optional dependencies in your activated virtual environment:
+
+```bash
+pip install -r requirements-parallel.txt
+```
+
+Set this in `config/config.yaml`, then restart the assistant:
+
+```yaml
+search:
+  provider: parallel
+  enabled: true
+  timeout_seconds: 30
+```
+
+Alternatively, set `WEB_SEARCH_PROVIDER=parallel` in your environment or `.env`.
+This overrides `search.provider`; `search.enabled: false` still prevents search.
+Use `duckduckgo` to explicitly select the original provider. Missing search
+settings preserve DuckDuckGo. An unknown provider or failed Parallel request
+returns an error without switching providers.
+
+Ask the assistant to "Search web for Python release news" through Telegram or
+web chat. The existing tool summarizes Parallel's excerpts with source URLs.
+Search uses Fast mode at `https://search.parallel.ai/mcp`, with no Parallel
+account or API key required. Queries are sent to Parallel only when selected;
+anonymous service limits apply. The existing Ollama setup and URL/YouTube
+summarization are unchanged. `timeout_seconds` bounds the MCP request, not model
+inference. No page-fetch tool is added.
+
 ---
 
 ## 🏃 Running

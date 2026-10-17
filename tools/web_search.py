@@ -2,13 +2,35 @@
 Web Search Tool — Search the web and summarize content.
 """
 import logging
+import os
 import re
 from langchain_core.tools import tool
 import config as app_config
 
 
 def perform_web_search(query):
-    """Performs a DuckDuckGo search."""
+    """Search with the configured provider; DuckDuckGo remains the default."""
+    settings = (app_config.load_config() or {}).get('search', {})
+    if settings.get('enabled', True) is False:
+        raise ValueError("Web search is disabled in configuration.")
+    if not query.strip():
+        raise ValueError("Please provide a search query.")
+    provider = os.getenv('WEB_SEARCH_PROVIDER', settings.get('provider', 'duckduckgo'))
+    if provider == 'parallel':
+        try:
+            from tools.parallel_search import search
+        except ImportError as exc:
+            raise RuntimeError(
+                "Parallel search requires: pip install -r requirements-parallel.txt"
+            ) from exc
+        return search(query, settings.get('timeout_seconds', 30))
+    if provider != 'duckduckgo':
+        raise ValueError(f"Unknown web search provider: {provider}")
+    return perform_duckduckgo_search(query)
+
+
+def perform_duckduckgo_search(query):
+    """Perform the existing DuckDuckGo search."""
     from ddgs import DDGS
     try:
         results = DDGS().text(query, max_results=5)
